@@ -13,9 +13,9 @@ type Elem struct {
 }
 
 type Node struct {
-	elem   Elem
-	after  *Node
-	before *Node
+	elem Elem
+	prev *Node
+	next *Node
 }
 
 // default is "empty" -- valid id's have time > 0
@@ -26,41 +26,54 @@ type Id struct {
 }
 
 type RGA struct {
-	peer     int
-	time     uint64
-	seq      uint64
-	mut      sync.Mutex
-	head     Node
-	m        map[Id]*Node
+	peer int
+	time uint64
+	seq  uint64
+	mut  sync.Mutex
+	head Node
+	m    map[Id]*Node
+	// remQ [][]*Node
+	remQ []*Node
+}
+
+func (r *RGA) clock(atLeast uint64) {
+	r.mut.Lock()
+	if atLeast > r.time {
+		r.time = atLeast
+	}
+	r.time = r.time + 1
+	r.mut.Unlock()
 }
 
 // makes every local operation on the rga unique by incrementing the clock
 func (r *RGA) getNewChange() Id {
-	r.mut.Lock()
-	r.time = r.time + 1
-	r.mut.Unlock()
+	r.clock(0)
 	r.seq = r.seq + 1
 	return Id{time: r.time, peer: r.peer}
 }
 
 // create new rga with head node
-func newRGA(peer int) *RGA {
+func newRGA(peer int, numPeers int) *RGA {
 	r := RGA{}
 	r.peer = peer
 
 	r.head = Node{
-		elem:   Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0},
-		after:  nil,
-		before: nil}
+		elem: Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0},
+		next: nil,
+		prev: nil}
 
 	return &r
 }
 
+// LOCAL OPERATIONS
+
+// appends a new char after an elem by creating a new elem locally
 func (r *RGA) append(val byte, after Id) (Elem, error) {
 	e := Elem{id: r.getNewChange(), after: after, rem: Id{}, val: val}
 	return e, r.update(e)
 }
 
+// "removes" an elem by setting its rem field to describe the new operation
 func (r *RGA) remove(id Id) (Elem, error) {
 	if n, ok := r.m[id]; ok {
 		n.elem.rem = r.getNewChange()
@@ -70,49 +83,65 @@ func (r *RGA) remove(id Id) (Elem, error) {
 	}
 }
 
-func (r *RGA) delete(id Id) error {
-	if n, ok := r.m[id]; ok {
-		if n.elem.rem == (Id{}) {
-			return errors.New("cannot delete non-removed node. check local call to delete")
+// actually deletes "removed" nodes up to id.seq on id.peer (should only be called when all peers are known to have seen it)
+func (r *RGA) cleanup(min []uint64) {
+	for i := len(r.remQ) - 1; i >= 0; i-- {
+		n := r.remQ[i]
+
+		if min[n.elem.id.peer] >= n.elem.id.seq {
+			n.next.prev = n.prev
+			n.prev.next = n.next
+			delete(r.m, n.elem.id)
+			last := len(r.remQ) - 1
+			r.remQ[i] = r.remQ[last]
+			r.remQ = r.remQ[:last]
 		}
+	}
+}
 
-		n.before.after = n.after
-		n.after.before = n.before
-		delete(r.m, id)
-		return nil
+// determines order of concurrent operations (all other operations are implicitly ordered by clock)
+func (e Elem) isNewerThan(e2 Elem) bool {
+	a := e.id
+	b := e2.id
+	if a.time > b.time {
+		return true
+	} else if a.time < b.time {
+		return false
 	} else {
-		return errors.New("cannot delete non-existent node. check gc call to delete")
+		return a.peer < b.peer // no two changes of equal time will have the same peer
 	}
 }
 
-func (r *RGA) clock(atLeast uint64) {
-	r.mut.Lock()
-	if atLeast > r.time {
-		r.time = atLeast
-	}
-	r.mut.Unlock()
-}
-
+// merge in any elem into RGA (used by local append and any downstream ops)
 func (r *RGA) update(e Elem) error {
 	// if node already exists, updates it (maintains idempotency)
 	if n, ok := r.m[e.id]; ok {
-		if e.rem.time == 0 {
+		if e.rem.time != 0 {
 			n.elem = e
+			r.remQ = append(r.remQ, n)
 		}
 	}
 
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.after]
 	if !ok {
-		return errors.New("Cannot find parent char")
+		return errors.New("cannot find parent elem")
 	}
 
-	node := &Node{elem: e, after: after, before: after.before}
-
-	if after.before != nil {
-		after.before.after = node
+	// find insert location
+	prev := after
+	next := prev.next
+	for next != nil && next.elem.after == next.prev.elem.id && next.elem.isNewerThan(e) {
+		prev = next
+		next = next.next
 	}
-	after.before = node
 
+	node := &Node{elem: e, next: next, prev: prev}
+	if next != nil {
+		next.prev = node
+	}
+	prev.next = node
+
+	r.m[e.id] = node
 	return nil
 }
