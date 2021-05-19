@@ -4,11 +4,6 @@ import (
 	"math"
 )
 
-type VecClock struct {
-	peer int
-	vc   []uint64
-}
-
 func min(nums ...uint64) uint64 {
 	var min uint64 = math.MaxUint64
 	for _, v := range nums {
@@ -41,7 +36,7 @@ func startGC(r *RGA) chan<- VecClock {
 				min[i] = m
 			}
 
-			// (todo) perform cleanup based on min
+			r.cleanup(min)
 		}
 	}()
 
