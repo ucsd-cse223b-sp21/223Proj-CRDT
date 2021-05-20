@@ -53,6 +53,16 @@ func (r *RGA) getNewChange() Id {
 	return Id{time: r.time, peer: r.peer}
 }
 
+func (r *RGA) getString() string {
+	var b []byte
+	curr := &r.head
+	for curr != nil {
+		b = append(b, curr.elem.val)
+		curr = curr.next
+	}
+	return string(b)
+}
+
 // create new rga with head node
 func newRGA(peer int, numPeers int) *RGA {
 	r := RGA{}

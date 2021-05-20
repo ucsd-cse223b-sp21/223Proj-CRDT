@@ -36,5 +36,6 @@ func TestSingleUser(t *testing.T) {
 
 	//rga should contain 'A'
 
-	log.Println(r)
+	log.Println("test")
+	log.Println(r.getString())
 }
