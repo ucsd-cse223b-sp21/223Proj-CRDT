@@ -27,6 +27,7 @@ type Id struct {
 
 type RGA struct {
 	peer int
+	numPeers int
 	time uint64
 	seq  uint64
 	mut  sync.Mutex
@@ -56,6 +57,7 @@ func (r *RGA) getNewChange() Id {
 func newRGA(peer int, numPeers int) *RGA {
 	r := RGA{}
 	r.peer = peer
+	r.numPeers = numPeers
 
 	r.head = Node{
 		elem: Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0},
