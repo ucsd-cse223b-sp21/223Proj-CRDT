@@ -26,13 +26,13 @@ type Id struct {
 }
 
 type RGA struct {
-	peer int
+	peer     int
 	numPeers int
-	time uint64
-	seq  uint64
-	mut  sync.Mutex
-	head Node
-	m    map[Id]*Node
+	time     uint64
+	seq      uint64
+	mut      sync.Mutex
+	head     Node
+	m        map[Id]*Node
 	// remQ [][]*Node
 	remQ []*Node
 }
@@ -63,6 +63,8 @@ func newRGA(peer int, numPeers int) *RGA {
 		elem: Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0},
 		next: nil,
 		prev: nil}
+	r.m = make(map[Id]*Node)
+	r.m[r.head.elem.id] = &r.head
 
 	return &r
 }
