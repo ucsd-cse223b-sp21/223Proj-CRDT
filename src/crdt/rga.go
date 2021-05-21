@@ -2,7 +2,6 @@ package crdt
 
 import (
 	"errors"
-	"log"
 	"sync"
 )
 
@@ -152,7 +151,7 @@ func (r *RGA) update(e Elem) error {
 			r.remQ = append(r.remQ, n)
 		}
 	}
-	log.Println("updating peer", r.peer, " after", e.after)
+	//log.Println("updating peer", r.peer, " after", e.after)
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.after]
 	if !ok {
