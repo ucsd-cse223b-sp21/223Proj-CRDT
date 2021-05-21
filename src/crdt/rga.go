@@ -2,6 +2,7 @@ package crdt
 
 import (
 	"errors"
+	"log"
 	"sync"
 )
 
@@ -57,10 +58,22 @@ func (r *RGA) getString() string {
 	var b []byte
 	curr := &r.head
 	for curr != nil {
-		b = append(b, curr.elem.val)
+		//if element is not deleted, append character
+		if (curr.elem.rem == Id{}) {
+			b = append(b, curr.elem.val)
+		}
 		curr = curr.next
 	}
-	return string(b)
+	return string(b[1:])
+}
+
+func newRGAList(numPeers int) []*RGA {
+	rList := make([]*RGA, numPeers)
+
+	for i := 0; i < 2; i++ {
+		rList[i] = newRGA(i, numPeers)
+	}
+	return rList
 }
 
 // create new rga with head node
@@ -70,7 +83,7 @@ func newRGA(peer int, numPeers int) *RGA {
 	r.numPeers = numPeers
 
 	r.head = Node{
-		elem: Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0},
+		elem: Elem{id: Id{0, 0, 0}, after: Id{}, rem: Id{}, val: 0},
 		next: nil,
 		prev: nil}
 	r.m = make(map[Id]*Node)
@@ -89,6 +102,9 @@ func (r *RGA) append(val byte, after Id) (Elem, error) {
 
 // "removes" an elem by setting its rem field to describe the new operation
 func (r *RGA) remove(id Id) (Elem, error) {
+	if id == r.head.elem.id {
+		return Elem{}, errors.New("r.head are not removable")
+	}
 	if n, ok := r.m[id]; ok {
 		n.elem.rem = r.getNewChange()
 		return n.elem, nil
@@ -128,6 +144,7 @@ func (e Elem) isNewerThan(e2 Elem) bool {
 
 // merge in any elem into RGA (used by local append and any downstream ops)
 func (r *RGA) update(e Elem) error {
+
 	// if node already exists, updates it (maintains idempotency)
 	if n, ok := r.m[e.id]; ok {
 		if e.rem.time != 0 {
@@ -135,7 +152,7 @@ func (r *RGA) update(e Elem) error {
 			r.remQ = append(r.remQ, n)
 		}
 	}
-
+	log.Println("updating peer", r.peer, " after", e.after)
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.after]
 	if !ok {
