@@ -60,13 +60,6 @@ func TestSingleUser(t *testing.T) {
 	as(r.getString() == "12")
 }
 
-func OneInManyRGABasicTest(t *testing.T, r *RGA) {
-
-	//attempt to remove head
-	_, err := r.remove(r.head.elem.id)
-	er(err)
-}
-
 func UpdateAllOtherPeer(peer int, rgaList []*RGA, elem Elem) error {
 	for i, r := range rgaList {
 		if i == peer {
@@ -90,6 +83,18 @@ func AppendAndUpate(char byte, after Id, r *RGA, rList []*RGA) (Elem, error) {
 		return Elem{}, err
 	}
 	return elem, nil
+}
+
+func RemoveAndUpdate(id Id, r *RGA, rList []*RGA) error {
+	elem, err := r.remove(id)
+	if err != nil {
+		return err
+	}
+	err = UpdateAllOtherPeer(r.peer, rList, elem)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func AppendStringAndUpdate(text string, after Id, r *RGA, rList []*RGA) ([]Elem, error) {
@@ -124,6 +129,8 @@ func TestTwoUser(t *testing.T) {
 		userView[i] = make([]Elem, viewUpperLimit)
 	}
 
+	///////////////// Append View test
+
 	//peer 0 type A and expect peer 1 to see A
 	elem, err := AppendAndUpate(byte('A'), r[0].head.elem.id, r[0], r)
 	ne(err)
@@ -138,7 +145,15 @@ func TestTwoUser(t *testing.T) {
 
 	//peer 0 types HelloWorld after A, should see
 	_, err = AppendStringAndUpdate("HelloWorld", elem.id, r[0], r)
+	ne(err)
 	//log.Println(r[0].getString())
 	AllPeerViewTest(t, r, "AHelloWorldB")
+
+	//////////////// Delete View test
+
+	//peer 1 trys to remove the 'A' peer 0 typed
+	err = RemoveAndUpdate(elem.id, r[1], r)
+	ne(err)
+	AllPeerViewTest(t, r, "HelloWorldB")
 
 }
