@@ -8,6 +8,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"net/url"
 
 	"crdt"
 
@@ -32,16 +33,29 @@ var peer int
 var addrs []string
 var conns map[*websocket.Conn]bool
 var upgrader = websocket.Upgrader{}
-var vc crdt.VecClock
-var rga crdt.RGA
+var rga *crdt.RGA
+var broadcast chan Message
+var gc chan<- crdt.VecClock
 
 func initialize(c Config) {
 	peer = c.peer
 	addrs = c.addrs
 
 	conns = make(map[*websocket.Conn]bool)
-	vc = crdt.VecClock{peer: peer, vc: make([]uint64, len(addrs))}
-	rga = crdt.newRGA(peer, len(addrs))
+	broadcast = make(chan Message)
+	rga = crdt.NewRGAOverNetwork(peer, len(addrs), broadcast)
+	gc = crdt.StartGC(rga)
+
+	for i, a := range addrs {
+		u := url.URL{Scheme: "ws", Host: a, Path: "/ws"}
+		c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+		if err != nil {
+			log.Printf("connection on join to peer %d failed : %s", i, err)
+			continue
+		}
+		conns[c] = true
+		go readPeer(c)
+	}
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,15 +88,15 @@ func readPeer(c *websocket.Conn) error {
 		}
 
 		log.Println(msg)
-		updateFromPeer(msg.e, msg.vc)
-	}
-}
+		elem := msg.e
+		vc := msg.vc
+		gc <- vc
 
-func updateFromPeer(e crdt.Elem, eVc crdt.VecClock) error {
-	// if we can apply the msg now, do so and check the queue
-	if vc.caused(eVc) {
-
-	} else {
+		// ignores message if it has already been received
+		if !rga.Contains(elem) {
+			broadcast <- Message{e: elem, vc: rga.VectorClock()}
+			rga.Update(elem)
+		}
 	}
 }
 
@@ -92,23 +106,17 @@ func serve() {
 	http.ListenAndServe(addrs[peer], mux)
 }
 
-// [0, 1]
-// [0, 2]
-// [0, 3]
-
-// [0,1]
-
-// [1,1]
-
-// 1 : [0,2], [0,3] , []
-
-// 1 <- [0,1] -> (queue) [0,2] -> (queue) [0,3]
-
-func broadcast(e crdt.Elem, vc crdt.VecClock) {
-	for conn := range conns {
-		err := conn.WriteMessage()
-		if err != nil {
-			delete(conns, conn)
+func writeProc() {
+	for {
+		msg := <-broadcast
+		for conn := range conns {
+			var buf bytes.Buffer
+			enc := gob.NewEncoder(&buf)
+			enc.Encode(msg)
+			e := conn.WriteMessage(websocket.BinaryMessage, buf.Bytes())
+			if e != nil {
+				delete(conns, conn)
+			}
 		}
 	}
 }
@@ -125,5 +133,5 @@ func main() {
 
 	initialize(config)
 
-	go serve()
+	serve()
 }

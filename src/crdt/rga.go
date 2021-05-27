@@ -2,6 +2,7 @@ package crdt
 
 import (
 	"errors"
+	"network"
 	"sync"
 )
 
@@ -33,8 +34,10 @@ type RGA struct {
 	mut      sync.Mutex
 	head     Node
 	m        map[Id]*Node
-	// remQ [][]*Node
-	remQ []*Node
+	// remQ [][]*Node // TODO : make gc more efficient
+	remQ      []*Node
+	vecC      VecClock
+	broadcast chan<- network.Message
 }
 
 func (r *RGA) clock(atLeast uint64) {
@@ -63,20 +66,33 @@ func (r *RGA) getString() string {
 	return string(b)
 }
 
-// create new rga with head node
-func newRGA(peer int, numPeers int) *RGA {
-	r := RGA{}
-	r.peer = peer
-	r.numPeers = numPeers
+func (r *RGA) Contains(e Elem) bool {
+	if n, ok := r.m[e.id]; ok && n.elem.rem == e.rem {
+		return true
+	}
+	return false
+}
 
-	r.head = Node{
-		elem: Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0},
-		next: nil,
-		prev: nil}
-	r.m = make(map[Id]*Node)
+// create new rga with head node
+func NewRGA(peer int, numPeers int) *RGA {
+	r := RGA{
+		peer:     peer,
+		numPeers: numPeers,
+		m:        make(map[Id]*Node),
+		remQ:     make([]*Node, 0),
+		vecC:     newVecClock(peer, numPeers),
+	}
+
+	r.head.elem = Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0}
 	r.m[r.head.elem.id] = &r.head
 
 	return &r
+}
+
+func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- network.Message) *RGA {
+	r := NewRGA(peer, numPeers)
+	r.broadcast = broadcast
+	return r
 }
 
 // LOCAL OPERATIONS
@@ -84,13 +100,23 @@ func newRGA(peer int, numPeers int) *RGA {
 // appends a new char after an elem by creating a new elem locally
 func (r *RGA) append(val byte, after Id) (Elem, error) {
 	e := Elem{id: r.getNewChange(), after: after, rem: Id{}, val: val}
-	return e, r.update(e)
+
+	// broadcast local change
+	if r.broadcast != nil {
+		r.broadcast <- network.Message{e: e, vc: r.VectorClock()}
+	}
+	return e, r.Update(e)
 }
 
 // "removes" an elem by setting its rem field to describe the new operation
 func (r *RGA) remove(id Id) (Elem, error) {
 	if n, ok := r.m[id]; ok {
 		n.elem.rem = r.getNewChange()
+
+		// broadcast local change
+		if r.broadcast != nil {
+			r.broadcast <- network.Message{e: n.elem, vc: r.VectorClock()}
+		}
 		return n.elem, nil
 	} else {
 		return Elem{}, errors.New("cannot remove non-existent node. check local call to remove")
@@ -126,15 +152,29 @@ func (e Elem) isNewerThan(e2 Elem) bool {
 	}
 }
 
+func (r *RGA) VectorClock() VecClock {
+	return r.vecC
+}
+
 // merge in any elem into RGA (used by local append and any downstream ops)
-func (r *RGA) update(e Elem) error {
+func (r *RGA) Update(e Elem) error {
+
 	// if node already exists, updates it (maintains idempotency)
 	if n, ok := r.m[e.id]; ok {
-		if e.rem.time != 0 {
+		// the remove update is new
+		if n.elem.rem.time == 0 && e.rem.time != 0 {
 			n.elem = e
 			r.remQ = append(r.remQ, n)
+			// update clock/vc for new remove
+			r.clock(e.rem.time)
+			r.vecC.incrementTo(e.rem.peer, e.rem.seq)
 		}
+		return nil
 	}
+
+	// update clock/vc for new append
+	r.clock(e.id.time)
+	r.vecC.incrementTo(e.id.peer, e.id.seq)
 
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.after]
