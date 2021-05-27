@@ -60,10 +60,22 @@ func (r *RGA) getString() string {
 	var b []byte
 	curr := &r.head
 	for curr != nil {
-		b = append(b, curr.elem.val)
+		//if element is not deleted, append character
+		if (curr.elem.rem == Id{}) {
+			b = append(b, curr.elem.val)
+		}
 		curr = curr.next
 	}
-	return string(b)
+	return string(b[1:])
+}
+
+func newRGAList(numPeers int) []*RGA {
+	rList := make([]*RGA, numPeers)
+
+	for i := 0; i < 2; i++ {
+		rList[i] = newRGA(i, numPeers)
+	}
+	return rList
 }
 
 func (r *RGA) Contains(e Elem) bool {
@@ -83,7 +95,7 @@ func NewRGA(peer int, numPeers int) *RGA {
 		vecC:     newVecClock(peer, numPeers),
 	}
 
-	r.head.elem = Elem{id: r.getNewChange(), after: Id{}, rem: Id{}, val: 0}
+	r.head.elem = Elem{id: Id{0, 0, 0}, after: Id{}, rem: Id{}, val: 0}
 	r.m[r.head.elem.id] = &r.head
 
 	return &r
@@ -110,6 +122,9 @@ func (r *RGA) append(val byte, after Id) (Elem, error) {
 
 // "removes" an elem by setting its rem field to describe the new operation
 func (r *RGA) remove(id Id) (Elem, error) {
+	if id == r.head.elem.id {
+		return Elem{}, errors.New("r.head are not removable")
+	}
 	if n, ok := r.m[id]; ok {
 		n.elem.rem = r.getNewChange()
 
