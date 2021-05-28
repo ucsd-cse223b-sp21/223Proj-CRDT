@@ -26,7 +26,7 @@ type Id struct {
 }
 
 type RGA struct {
-	peer     int
+	Peer     int
 	numPeers int
 	time     uint64
 	seq      uint64
@@ -50,7 +50,7 @@ func (r *RGA) clock(atLeast uint64) {
 func (r *RGA) getNewChange() Id {
 	r.clock(0)
 	r.seq = r.seq + 1
-	return Id{time: r.time, peer: r.peer}
+	return Id{time: r.time, peer: r.Peer}
 }
 
 func (r *RGA) getString() string {
@@ -78,7 +78,7 @@ func newRGAList(numPeers int) []*RGA {
 // create new rga with head node
 func newRGA(peer int, numPeers int) *RGA {
 	r := RGA{}
-	r.peer = peer
+	r.Peer = peer
 	r.numPeers = numPeers
 
 	r.head = Node{
@@ -94,9 +94,9 @@ func newRGA(peer int, numPeers int) *RGA {
 // LOCAL OPERATIONS
 
 // appends a new char after an elem by creating a new elem locally
-func (r *RGA) append(val byte, after Id) (Elem, error) {
+func (r *RGA) Append(val byte, after Id) (Elem, error) {
 	e := Elem{id: r.getNewChange(), after: after, rem: Id{}, val: val}
-	return e, r.update(e)
+	return e, r.Update(e)
 }
 
 // "removes" an elem by setting its rem field to describe the new operation
@@ -142,7 +142,7 @@ func (e Elem) isNewerThan(e2 Elem) bool {
 }
 
 // merge in any elem into RGA (used by local append and any downstream ops)
-func (r *RGA) update(e Elem) error {
+func (r *RGA) Update(e Elem) error {
 
 	// if node already exists, updates it (maintains idempotency)
 	if n, ok := r.m[e.id]; ok {
