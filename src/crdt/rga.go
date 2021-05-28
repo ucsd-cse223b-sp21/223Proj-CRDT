@@ -56,6 +56,21 @@ func (r *RGA) getNewChange() Id {
 	return Id{time: r.time, peer: r.peer}
 }
 
+func (r *RGA) getView() (string, []Id) {
+	var b []byte
+	var i []Id
+	curr := &r.head
+	for curr != nil {
+		//if element is not deleted, append character
+		if (curr.elem.rem == Id{}) {
+			b = append(b, curr.elem.val)
+			i = append(i, curr.elem.id)
+		}
+		curr = curr.next
+	}
+	return string(b[1:]), i[1:]
+}
+
 func (r *RGA) getString() string {
 	var b []byte
 	curr := &r.head
