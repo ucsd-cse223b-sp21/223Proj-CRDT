@@ -8,7 +8,7 @@ import (
 type Document interface {
 	View() string
 
-	Append(after int, val string) (Document, error)
+	Append(after int, val byte) (Document, error)
 
 	Remove(at int) (Document, error)
 }
@@ -21,12 +21,12 @@ func (d NiaveDoc) View() string {
 	return d.content
 }
 
-func (d NiaveDoc) Append(after int, val string) (Document, error) {
+func (d NiaveDoc) Append(after int, val byte) (Document, error) {
 	if after > len(d.content) || after < 0 {
 		return nil, errors.New("cannot append outside of doc")
 	}
 	c := d.content
-	c = c[:after] + val + c[after:]
+	c = c[:after] + string(rune(val)) + c[after:]
 	return NiaveDoc{c}, nil
 }
 
@@ -49,27 +49,40 @@ type RgaDoc struct {
 }
 
 func (d RgaDoc) View() string {
-	return d.r.getString()
+	text, idL := d.r.GetView()
+	d.idList = idL
+	return text
 }
 
 func (d RgaDoc) Append(after int, val byte) (Document, error) {
 	if after > len(d.content) || after < 0 {
 		return nil, errors.New("cannot append outside of doc")
 	}
+
+	_, err := d.AppendAndUpate(val, d.idList[after])
+	if err != nil {
+		return nil, err
+	}
+
 	c := d.content
-	c = c[:after] + val + c[after:]
-	d.AppendAndUpate(val)
-	d.idList =  
-	return RgaDoc{c, d.rgaList, d.r}, nil
+	c = c[:after] + string(rune(val)) + c[after:]
+
+	return RgaDoc{c, d.idList, d.rgaList, d.r}, nil
 }
 
 func (d RgaDoc) Remove(at int) (Document, error) {
 	if at > len(d.content) || at < 0 {
 		return nil, errors.New("cannot remove non-existent character")
 	}
+
+	err := d.RemoveAndUpdate(d.idList[at])
+	if err != nil {
+		return nil, err
+	}
+
 	c := d.content
 	c = c[:at] + c[at+1:]
-	return RgaDoc{c, d.rgaList, d.r}, nil
+	return RgaDoc{c, d.idList, d.rgaList, d.r}, nil
 }
 
 func (d RgaDoc) UpdateAllOtherPeer(elem crdt.Elem) error {
@@ -97,4 +110,14 @@ func (d RgaDoc) AppendAndUpate(char byte, after crdt.Id) (crdt.Elem, error) {
 	return elem, nil
 }
 
-var _ Document = new(RgaDoc)
+func (d RgaDoc) RemoveAndUpdate(id crdt.Id) error {
+	elem, err := d.r.Remove(id)
+	if err != nil {
+		return err
+	}
+	err = d.UpdateAllOtherPeer(elem)
+	if err != nil {
+		return err
+	}
+	return nil
+}

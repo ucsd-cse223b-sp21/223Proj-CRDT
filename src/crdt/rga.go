@@ -55,7 +55,7 @@ func (r *RGA) getNewChange() Id {
 	return Id{time: r.time, peer: r.Peer}
 }
 
-func (r *RGA) getView() (string, []Id) {
+func (r *RGA) GetView() (string, []Id) {
 	var b []byte
 	var i []Id
 	curr := &r.head
@@ -102,7 +102,7 @@ func (r *RGA) Contains(e Elem) bool {
 // create new rga with head node
 func NewRGA(peer int, numPeers int) *RGA {
 	r := RGA{
-		peer:     peer,
+		Peer:     peer,
 		numPeers: numPeers,
 		m:        make(map[Id]*Node),
 		// remQ:     make([]*Node, 0),
@@ -136,7 +136,7 @@ func (r *RGA) Append(val byte, after Id) (Elem, error) {
 }
 
 // "removes" an elem by setting its rem field to describe the new operation
-func (r *RGA) remove(id Id) (Elem, error) {
+func (r *RGA) Remove(id Id) (Elem, error) {
 	if id == r.head.elem.id {
 		return Elem{}, errors.New("r.head are not removable")
 	}

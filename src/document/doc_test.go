@@ -2,21 +2,25 @@ package document
 
 import (
 	"log"
+	"runtime/debug"
 	"testing"
 )
 
 func ne(e error) {
 	if e != nil {
+		debug.PrintStack()
 		log.Fatal(e)
 	}
 }
 func er(e error) {
 	if e == nil {
+		debug.PrintStack()
 		log.Fatal("didn't get an error, when it should")
 	}
 }
 func as(cond bool) {
 	if !cond {
+		debug.PrintStack()
 		log.Fatal("assertion failed")
 	}
 }
@@ -25,44 +29,42 @@ func TestDoc(t *testing.T) {
 	log.Println("testing document")
 
 	// create doc
-	doc := new(NiaveDoc)
-	as(doc.content == "")
+	doc_pointer := new(NiaveDoc)
+	var doc Document = *doc_pointer
+	as(doc.View() == "")
 
 	//append out of range test
-	_, err := doc.Append(-1, "nnnnnnnnnn")
+	_, err := doc.Append(-1, byte('n'))
 	er(err)
-	_, err = doc.Append(len(doc.content)+1, "nnnnnnnnnn")
+	_, err = doc.Append(len(doc.View())+1, byte('n'))
 	er(err)
 
 	// append view test
-	newdoc, err := doc.Append(0, "Hello")
-	ne(err)
-	as(newdoc.View() == "Hello")
-	newdoc, err = newdoc.Append(len(newdoc.View()), " ")
-	ne(err)
-	as(newdoc.View() == "Hello ")
-	newdoc, err = newdoc.Append(len(newdoc.View()), "World")
-	ne(err)
-	as(newdoc.View() == "Hello World")
-	newdoc, err = newdoc.Append(len(newdoc.View()), "!")
-	ne(err)
-	as(newdoc.View() == "Hello World!")
+	cursor := 0
+	for _, cha := range "Hello World!" {
+		newdoc, err := doc.Append(cursor, byte(cha))
+		doc = newdoc
+		cursor++
+		ne(err)
+	}
+	log.Println(doc.View())
+	as(doc.View() == "Hello World!")
 
 	// remove out of range test
-	_, err = newdoc.Remove(-1)
+	_, err = doc.Remove(-1)
 	er(err)
-	_, err = newdoc.Remove(len("Hello World!") + 1)
+	_, err = doc.Remove(len("Hello World!") + 1)
 	er(err)
 
 	// remove view test
-	newdoc, err = newdoc.Remove(len("Hello World!") - 1)
+	doc, err = doc.Remove(len("Hello World!") - 1)
 	ne(err)
-	as(newdoc.View() == "Hello World")
+	as(doc.View() == "Hello World")
 
-	newdoc, err = newdoc.Remove(0)
+	doc, err = doc.Remove(0)
 	ne(err)
-	newdoc, err = newdoc.Remove(4)
+	doc, err = doc.Remove(4)
 	ne(err)
-	as(newdoc.View() == "elloWorld")
+	as(doc.View() == "elloWorld")
 
 }
