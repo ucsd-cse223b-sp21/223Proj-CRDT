@@ -34,7 +34,7 @@ var addrs []string
 var conns map[*websocket.Conn]bool
 var upgrader = websocket.Upgrader{}
 var rga *crdt.RGA
-var broadcast chan Message
+var broadcast chan crdt.Elem
 var gc chan<- crdt.VecClock
 
 func initialize(c Config) {
@@ -42,7 +42,7 @@ func initialize(c Config) {
 	addrs = c.addrs
 
 	conns = make(map[*websocket.Conn]bool)
-	broadcast = make(chan Message)
+	broadcast = make(chan crdt.Elem)
 	rga = crdt.NewRGAOverNetwork(peer, len(addrs), broadcast)
 	gc = crdt.StartGC(rga)
 
@@ -94,7 +94,7 @@ func readPeer(c *websocket.Conn) error {
 
 		// ignores message if it has already been received
 		if !rga.Contains(elem) {
-			broadcast <- Message{e: elem, vc: rga.VectorClock()}
+			broadcast <- elem
 			rga.Update(elem)
 		}
 	}
@@ -108,7 +108,8 @@ func serve() {
 
 func writeProc() {
 	for {
-		msg := <-broadcast
+		e := <-broadcast
+		msg := Message{e: e, vc: rga.VectorClock()}
 		for conn := range conns {
 			var buf bytes.Buffer
 			enc := gob.NewEncoder(&buf)

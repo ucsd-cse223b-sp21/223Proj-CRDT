@@ -2,7 +2,6 @@ package crdt
 
 import (
 	"errors"
-	"network"
 	"sync"
 )
 
@@ -34,10 +33,10 @@ type RGA struct {
 	mut      sync.Mutex
 	head     Node
 	m        map[Id]*Node
-	// remQ [][]*Node // TODO : make gc more efficient
-	remQ      []*Node
+	remQ     [][]*Node // TODO : make gc more efficient with array of arrows indexed by seq
+	// remQ      []*Node
 	vecC      VecClock
-	broadcast chan<- network.Message
+	broadcast chan<- Elem
 }
 
 func (r *RGA) clock(atLeast uint64) {
@@ -88,7 +87,7 @@ func newRGAList(numPeers int) []*RGA {
 	rList := make([]*RGA, numPeers)
 
 	for i := 0; i < 2; i++ {
-		rList[i] = newRGA(i, numPeers)
+		rList[i] = NewRGA(i, numPeers)
 	}
 	return rList
 }
@@ -106,8 +105,9 @@ func NewRGA(peer int, numPeers int) *RGA {
 		peer:     peer,
 		numPeers: numPeers,
 		m:        make(map[Id]*Node),
-		remQ:     make([]*Node, 0),
-		vecC:     newVecClock(peer, numPeers),
+		// remQ:     make([]*Node, 0),
+		remQ: make([][]*Node, numPeers),
+		vecC: newVecClock(peer, numPeers),
 	}
 
 	r.head.elem = Elem{id: Id{0, 0, 0}, after: Id{}, rem: Id{}, val: 0}
@@ -116,7 +116,7 @@ func NewRGA(peer int, numPeers int) *RGA {
 	return &r
 }
 
-func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- network.Message) *RGA {
+func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- Elem) *RGA {
 	r := NewRGA(peer, numPeers)
 	r.broadcast = broadcast
 	return r
@@ -130,7 +130,7 @@ func (r *RGA) Append(val byte, after Id) (Elem, error) {
 
 	// broadcast local change
 	if r.broadcast != nil {
-		r.broadcast <- network.Message{e: e, vc: r.VectorClock()}
+		r.broadcast <- e
 	}
 	return e, r.Update(e)
 }
@@ -145,7 +145,7 @@ func (r *RGA) remove(id Id) (Elem, error) {
 
 		// broadcast local change
 		if r.broadcast != nil {
-			r.broadcast <- network.Message{e: n.elem, vc: r.VectorClock()}
+			r.broadcast <- n.elem
 		}
 		return n.elem, nil
 	} else {
@@ -155,17 +155,20 @@ func (r *RGA) remove(id Id) (Elem, error) {
 
 // actually deletes "removed" nodes up to id.seq on id.peer (should only be called when all peers are known to have seen it)
 func (r *RGA) cleanup(min []uint64) {
-	for i := len(r.remQ) - 1; i >= 0; i-- {
-		n := r.remQ[i]
+	// for i := len(r.remQ) - 1; i >= 0; i-- {
+	// 	n := r.remQ[i]
 
-		if min[n.elem.id.peer] >= n.elem.id.seq {
-			n.next.prev = n.prev
-			n.prev.next = n.next
-			delete(r.m, n.elem.id)
-			last := len(r.remQ) - 1
-			r.remQ[i] = r.remQ[last]
-			r.remQ = r.remQ[:last]
-		}
+	// 	if min[n.elem.id.peer] >= n.elem.id.seq {
+	// 		n.next.prev = n.prev
+	// 		n.prev.next = n.next
+	// 		delete(r.m, n.elem.id)
+	// 		last := len(r.remQ) - 1
+	// 		r.remQ[i] = r.remQ[last]
+	// 		r.remQ = r.remQ[:last]
+	// 	}
+	// }
+	for i, m := range min {
+		r.remQ[i] = r.remQ[i][m:]
 	}
 }
 
@@ -186,6 +189,29 @@ func (r *RGA) VectorClock() VecClock {
 	return r.vecC
 }
 
+// binary search and insert
+func sortedInsert(list []*Node, node *Node) []*Node {
+	l := len(list)
+	if l == 0 {
+		return append(list, node)
+	}
+
+	low := 0
+	high := len(list) - 1
+	for low < high {
+		median := (low + high) / 2
+		if list[median].elem.rem.seq < node.elem.rem.seq {
+			low = median - 1
+		} else if list[median].elem.rem.seq > node.elem.rem.seq {
+			high = median + 1
+		} else {
+			return list
+		}
+	}
+
+	return append(append(list[:low+1], node), list[low+1:]...)
+}
+
 // merge in any elem into RGA (used by local append and any downstream ops)
 func (r *RGA) Update(e Elem) error {
 
@@ -194,7 +220,8 @@ func (r *RGA) Update(e Elem) error {
 		// the remove update is new
 		if n.elem.rem.time == 0 && e.rem.time != 0 {
 			n.elem = e
-			r.remQ = append(r.remQ, n)
+			// r.remQ = append(r.remQ, n)
+			r.remQ[e.rem.peer] = sortedInsert(r.remQ[e.rem.peer], n)
 			// update clock/vc for new remove
 			r.clock(e.rem.time)
 			r.vecC.incrementTo(e.rem.peer, e.rem.seq)
