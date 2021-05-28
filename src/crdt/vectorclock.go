@@ -5,6 +5,11 @@ type VecClock struct {
 	vc   []uint64
 }
 
+func newVecClock(peer int, num int) VecClock {
+	vc := make([]uint64, num)
+	return VecClock{peer, vc}
+}
+
 func (v *VecClock) min(b VecClock) VecClock {
 	c := *v
 	for i := range b.vc {
@@ -16,8 +21,10 @@ func (v *VecClock) min(b VecClock) VecClock {
 	return c
 }
 
-func (v *VecClock) incrementAt(i int) {
-	v.vc[i]++
+func (v *VecClock) incrementTo(peer int, seq uint64) {
+	if v.vc[peer] < seq {
+		v.vc[peer] = seq
+	}
 }
 
 // true when v is atmost one op behind on b.peer and up-to-date/ahead on everything else

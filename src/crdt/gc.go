@@ -9,7 +9,7 @@ func minVC(nums ...VecClock) VecClock {
 }
 
 // creates channel
-func startGC(r *RGA) chan<- VecClock {
+func StartGC(r *RGA) chan<- VecClock {
 	c := make(chan VecClock)
 
 	go func() {
