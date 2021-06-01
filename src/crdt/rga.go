@@ -6,10 +6,10 @@ import (
 )
 
 type Elem struct {
-	id    Id
-	after Id
-	rem   Id
-	val   byte
+	ID    Id
+	After Id
+	Rem   Id
+	Val   byte
 }
 
 type Node struct {
@@ -20,9 +20,9 @@ type Node struct {
 
 // default is "empty" -- valid id's have time > 0
 type Id struct {
-	time uint64
-	peer int
-	seq  uint64
+	Time  uint64
+	Peer_ int
+	Seq   uint64
 }
 
 type RGA struct {
@@ -52,7 +52,7 @@ func (r *RGA) clock(atLeast uint64) {
 func (r *RGA) getNewChange() Id {
 	r.clock(0)
 	r.seq = r.seq + 1
-	return Id{time: r.time, peer: r.Peer}
+	return Id{Time: r.time, Peer_: r.Peer}
 }
 
 func (r *RGA) GetView() (string, []Id) {
@@ -61,9 +61,9 @@ func (r *RGA) GetView() (string, []Id) {
 	curr := &r.head
 	for curr != nil {
 		//if element is not deleted, append character
-		if (curr.elem.rem == Id{}) {
-			b = append(b, curr.elem.val)
-			i = append(i, curr.elem.id)
+		if (curr.elem.Rem == Id{}) {
+			b = append(b, curr.elem.Val)
+			i = append(i, curr.elem.ID)
 		}
 		curr = curr.next
 	}
@@ -75,8 +75,8 @@ func (r *RGA) getString() string {
 	curr := &r.head
 	for curr != nil {
 		//if element is not deleted, append character
-		if (curr.elem.rem == Id{}) {
-			b = append(b, curr.elem.val)
+		if (curr.elem.Rem == Id{}) {
+			b = append(b, curr.elem.Val)
 		}
 		curr = curr.next
 	}
@@ -93,7 +93,7 @@ func newRGAList(numPeers int) []*RGA {
 }
 
 func (r *RGA) Contains(e Elem) bool {
-	if n, ok := r.m[e.id]; ok && n.elem.rem == e.rem {
+	if n, ok := r.m[e.ID]; ok && n.elem.Rem == e.Rem {
 		return true
 	}
 	return false
@@ -110,8 +110,8 @@ func NewRGA(peer int, numPeers int) *RGA {
 		vecC: newVecClock(peer, numPeers),
 	}
 
-	r.head.elem = Elem{id: Id{0, 0, 0}, after: Id{}, rem: Id{}, val: 0}
-	r.m[r.head.elem.id] = &r.head
+	r.head.elem = Elem{ID: Id{0, 0, 0}, After: Id{}, Rem: Id{}, Val: 0}
+	r.m[r.head.elem.ID] = &r.head
 
 	return &r
 }
@@ -126,7 +126,7 @@ func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- Elem) *RGA {
 
 // appends a new char after an elem by creating a new elem locally
 func (r *RGA) Append(val byte, after Id) (Elem, error) {
-	e := Elem{id: r.getNewChange(), after: after, rem: Id{}, val: val}
+	e := Elem{ID: r.getNewChange(), After: after, Rem: Id{}, Val: val}
 
 	// broadcast local change
 	if r.broadcast != nil {
@@ -137,11 +137,11 @@ func (r *RGA) Append(val byte, after Id) (Elem, error) {
 
 // "removes" an elem by setting its rem field to describe the new operation
 func (r *RGA) Remove(id Id) (Elem, error) {
-	if id == r.head.elem.id {
+	if id == r.head.elem.ID {
 		return Elem{}, errors.New("r.head are not removable")
 	}
 	if n, ok := r.m[id]; ok {
-		n.elem.rem = r.getNewChange()
+		n.elem.Rem = r.getNewChange()
 
 		// broadcast local change
 		if r.broadcast != nil {
@@ -174,14 +174,14 @@ func (r *RGA) cleanup(min []uint64) {
 
 // determines order of concurrent operations (all other operations are implicitly ordered by clock)
 func (e Elem) isNewerThan(e2 Elem) bool {
-	a := e.id
-	b := e2.id
-	if a.time > b.time {
+	a := e.ID
+	b := e2.ID
+	if a.Time > b.Time {
 		return true
-	} else if a.time < b.time {
+	} else if a.Time < b.Time {
 		return false
 	} else {
-		return a.peer < b.peer // no two changes of equal time will have the same peer
+		return a.Peer_ < b.Peer_ // no two changes of equal time will have the same peer
 	}
 }
 
@@ -200,9 +200,9 @@ func sortedInsert(list []*Node, node *Node) []*Node {
 	high := len(list) - 1
 	for low < high {
 		median := (low + high) / 2
-		if list[median].elem.rem.seq < node.elem.rem.seq {
+		if list[median].elem.Rem.Seq < node.elem.Rem.Seq {
 			low = median - 1
-		} else if list[median].elem.rem.seq > node.elem.rem.seq {
+		} else if list[median].elem.Rem.Seq > node.elem.Rem.Seq {
 			high = median + 1
 		} else {
 			return list
@@ -216,25 +216,25 @@ func sortedInsert(list []*Node, node *Node) []*Node {
 func (r *RGA) Update(e Elem) error {
 
 	// if node already exists, updates it (maintains idempotency)
-	if n, ok := r.m[e.id]; ok {
+	if n, ok := r.m[e.ID]; ok {
 		// the remove update is new
-		if n.elem.rem.time == 0 && e.rem.time != 0 {
+		if n.elem.Rem.Time == 0 && e.Rem.Time != 0 {
 			n.elem = e
 			// r.remQ = append(r.remQ, n)
-			r.remQ[e.rem.peer] = sortedInsert(r.remQ[e.rem.peer], n)
+			r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
 			// update clock/vc for new remove
-			r.clock(e.rem.time)
-			r.vecC.incrementTo(e.rem.peer, e.rem.seq)
+			r.clock(e.Rem.Time)
+			r.vecC.incrementTo(e.Rem.Peer_, e.Rem.Seq)
 		}
 		return nil
 	}
 
 	// update clock/vc for new append
-	r.clock(e.id.time)
-	r.vecC.incrementTo(e.id.peer, e.id.seq)
+	r.clock(e.ID.Time)
+	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
 
 	// if parent does not exist, return error (maintains causal order)
-	after, ok := r.m[e.after]
+	after, ok := r.m[e.After]
 	if !ok {
 		return errors.New("cannot find parent elem")
 	}
@@ -242,7 +242,7 @@ func (r *RGA) Update(e Elem) error {
 	// find insert location
 	prev := after
 	next := prev.next
-	for next != nil && next.elem.after == next.prev.elem.id && next.elem.isNewerThan(e) {
+	for next != nil && next.elem.After == next.prev.elem.ID && next.elem.isNewerThan(e) {
 		prev = next
 		next = next.next
 	}
@@ -253,6 +253,6 @@ func (r *RGA) Update(e Elem) error {
 	}
 	prev.next = node
 
-	r.m[e.id] = node
+	r.m[e.ID] = node
 	return nil
 }
