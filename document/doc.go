@@ -1,8 +1,8 @@
 package document
 
 import (
-	"crdt"
 	"errors"
+	"proj/crdt"
 )
 
 type Document interface {
