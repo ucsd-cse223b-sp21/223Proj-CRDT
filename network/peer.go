@@ -52,20 +52,31 @@ func makePeer(c Config) *Peer {
 		gc:        crdt.StartGC(rga),
 	}
 
+	// proactively attempt starting connections on creation
+	// if peer goes down and back up, it will attempt to reconnect here
+	// (need seperate logic for network partition if we care -- ie: disconnected but not restarted)
 	for i, a := range peer.addrs {
+		if i == peer.peer {
+			continue
+		}
+
+		// TODO make sure this url scheme works for connections (based on client example in websocket repo)
 		u := url.URL{Scheme: "ws", Host: a, Path: "/ws"}
 		c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 		if err != nil {
 			log.Printf("connection on join to peer %d failed : %s", i, err)
 			continue
 		}
+
+		// create connection and goroutine for reading from it
 		peer.conns[c] = true
-		go readPeer(c)
+		go peer.readPeer(c)
 	}
 
 	return &peer
 }
 
+// create handler wrapping peer object to read messages from other peer
 func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := p.upgrader.Upgrade(w, r, nil)
@@ -74,16 +85,18 @@ func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		// create connection and goroutine for reading from it
+		// TODO: determine if need to create go-routine here or not (think we should)
 		p.conns[c] = true
-
-		// loop and read from peer initiated that connection
-		p.readPeer(c)
+		go p.readPeer(c)
 	}
 }
 
+// reads messages from peer in loop until connection fails
 func (p *Peer) readPeer(c *websocket.Conn) error {
 	for {
 		_, buf, err := c.ReadMessage()
+		// TODO: make sure error means disconnection
 		if err != nil {
 			delete(p.conns, c)
 			return errors.New("connection is down")
@@ -110,12 +123,15 @@ func (p *Peer) readPeer(c *websocket.Conn) error {
 	}
 }
 
+// have peer start acting as server (can receive websocket connections)
 func (p *Peer) serve() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", p.makeHandler())
 	http.ListenAndServe(p.addrs[p.peer], mux)
 }
 
+// process for writing(broadcasting) elem's to all peers
+// potentially consider parallelizing the writes to different peers?
 func (p *Peer) writeProc() {
 	for {
 		e := <-p.broadcast
@@ -132,6 +148,7 @@ func (p *Peer) writeProc() {
 	}
 }
 
+// basic main for starting up a peer using config parsed from an argument
 func main() {
 	flag.Parse()
 	configString := flag.Arg(1)
