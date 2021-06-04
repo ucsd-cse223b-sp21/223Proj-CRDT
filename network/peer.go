@@ -21,13 +21,15 @@ type Config struct {
 }
 
 type Message struct {
-	e  crdt.Elem
-	vc crdt.VecClock
+	E  crdt.Elem
+	Vc crdt.VecClock
 }
 
 var (
 	config = flag.String("addr", "", "address of server")
 )
+
+const BACKUP_SIZE = 1000
 
 type Peer struct {
 	peer      int
@@ -36,7 +38,9 @@ type Peer struct {
 	upgrader  websocket.Upgrader
 	Rga       *crdt.RGA
 	broadcast chan crdt.Elem
+	backup    chan crdt.Elem
 	gc        chan<- crdt.VecClock
+	dc        bool
 }
 
 func MakePeer(c Config) *Peer {
@@ -48,10 +52,16 @@ func MakePeer(c Config) *Peer {
 		upgrader:  websocket.Upgrader{},
 		conns:     make(map[*websocket.Conn]bool),
 		broadcast: broadcast,
-		Rga:       rga,
+		backup:    make(chan crdt.Elem, BACKUP_SIZE),
+		rga:       rga,
 		gc:        crdt.StartGC(rga),
+		dc:        false,
 	}
 
+	return &peer
+}
+
+func (peer *Peer) initPeer() {
 	// proactively attempt starting connections on creation
 	// if peer goes down and back up, it will attempt to reconnect here
 	// (need seperate logic for network partition if we care -- ie: disconnected but not restarted)
@@ -73,7 +83,7 @@ func MakePeer(c Config) *Peer {
 		go peer.readPeer(c)
 	}
 
-	return &peer
+	go peer.writeProc()
 }
 
 // create handler wrapping peer object to read messages from other peer
@@ -95,24 +105,31 @@ func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 // reads messages from peer in loop until connection fails
 func (p *Peer) readPeer(c *websocket.Conn) error {
 	for {
-		_, buf, err := c.ReadMessage()
+		mT, buf, err := c.ReadMessage()
+		log.Printf("Message type: %d", mT)
+		log.Printf("Read message on Peer %d", p.peer)
+
 		// TODO: make sure error means disconnection
 		if err != nil {
 			delete(p.conns, c)
 			return errors.New("connection is down")
 		}
 
+		log.Println("Read messsage successfully ")
+
 		dec := gob.NewDecoder(bytes.NewBuffer(buf))
 		var msg Message
 		err = dec.Decode(&msg)
 
 		if err != nil {
+			log.Println("Decode failed")
+			log.Fatal(err)
 			return errors.New("decode of peer's message failed")
 		}
 
 		log.Println(msg)
-		elem := msg.e
-		vc := msg.vc
+		elem := msg.E
+		vc := msg.Vc
 		p.gc <- vc
 
 		// ignores message if it has already been received
@@ -135,15 +152,30 @@ func (p *Peer) Serve() {
 func (p *Peer) writeProc() {
 	for {
 		e := <-p.broadcast
-		msg := Message{e: e, vc: p.Rga.VectorClock()}
-		for conn := range p.conns {
-			var buf bytes.Buffer
-			enc := gob.NewEncoder(&buf)
-			enc.Encode(msg)
-			e := conn.WriteMessage(websocket.BinaryMessage, buf.Bytes())
-			if e != nil {
-				delete(p.conns, conn)
+		if p.dc {
+			p.backup <- e
+			continue
+		} else if len(p.backup) > 0 {
+			for len(p.backup) > 0 {
+				p.Broadcast(<-p.backup)
 			}
+		}
+
+		p.Broadcast(e)
+	}
+}
+
+func (p *Peer) Broadcast(e crdt.Elem) {
+	msg := Message{E: e, Vc: p.rga.VectorClock()}
+	for conn := range p.conns {
+		buf := bytes.NewBuffer([]byte{})
+		enc := gob.NewEncoder(buf)
+		enc.Encode(msg)
+
+		e := conn.WriteMessage(websocket.TextMessage, buf.Bytes())
+		// TODO make sure error always implies delete
+		if e != nil {
+			delete(p.conns, conn)
 		}
 	}
 }

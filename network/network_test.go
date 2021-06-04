@@ -1,15 +1,11 @@
 package network
 
 import (
-	"bytes"
-	"encoding/gob"
 	"log"
+	"proj/crdt"
 	"runtime/debug"
 	"testing"
-
-	"proj/crdt"
-
-	"github.com/gorilla/websocket"
+	"time"
 )
 
 func ne(e error) {
@@ -44,19 +40,44 @@ func as(cond bool) {
 }
 */
 
+// -addr=localhost:3000
+
 func TestReadPeer(t *testing.T) {
-	var c *websocket.Conn
-	var buf bytes.Buffer
-	//var msg Message
-	e := crdt.Elem{ID: crdt.Id{0, 0, 0}, After: crdt.Id{}, Rem: crdt.Id{}, Val: 8}
-	msg := Message{e: e, vc: crdt.VecClock{}}
-	enc := gob.NewEncoder(&buf)
-	enc.Encode(msg)
-	err := c.WriteMessage(websocket.TextMessage, buf.Bytes())
-	if err != nil {
-		er(err)
+	addrs := []string{"localhost:3000", "localhost:3001"}
+	config := Config{
+		peer:  0,
+		addrs: addrs,
 	}
-	err1 := readPeer(c)
-	ne(err1)
+	peer1 := makePeer(config)
+	config.peer = 1
+	peer2 := makePeer(config)
+
+	go peer1.serve()
+	go peer2.serve()
+	peer1.initPeer()
+	peer2.initPeer()
+
+	elem, err := peer1.rga.Append('9', crdt.Id{})
+	ne(err)
+
+	time.Sleep(1 * time.Second)
+
+	log.Println(peer2.rga.GetView())
+	as(peer2.rga.Contains(elem))
+
+	//var buf bytes.Buffer
+	/*
+		//var msg Message
+		//e := crdt.Elem{ID: crdt.Id{0, 0, 0}, After: crdt.Id{}, Rem: crdt.Id{}, Val: 8}
+		//msg := Message{e: e, vc: crdt.VecClock{}}
+		//enc := gob.NewEncoder(&buf)
+		//enc.Encode(msg)
+		//err := c.WriteMessage(websocket.TextMessage, buf.Bytes())
+		if err != nil {
+			er(err)
+		}
+		err1 := readPeer(c)
+		ne(err1)
+	*/
 
 }
