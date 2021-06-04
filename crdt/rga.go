@@ -108,7 +108,7 @@ func NewRGA(peer int, numPeers int) *RGA {
 		m:        make(map[Id]*Node),
 		// remQ:     make([]*Node, 0),
 		remQ: make([][]*Node, numPeers),
-		vecC: newVecClock(peer, numPeers),
+		vecC: NewVecClock(peer, numPeers),
 	}
 
 	r.Head.Elem = Elem{ID: Id{0, 0, 0}, After: Id{}, Rem: Id{}, Val: 0}

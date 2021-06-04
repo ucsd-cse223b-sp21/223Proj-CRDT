@@ -14,14 +14,17 @@ func StartGC(r *RGA) chan<- VecClock {
 
 	go func() {
 		vcs := make([]VecClock, r.numPeers)
+		for i := range vcs {
+			vcs[i] = NewVecClock(i, r.numPeers)
+		}
 
 		for {
 			vc := <-c
-			vcs[vc.peer] = vc
+			vcs[vc.Peer] = vc
 
 			// get min knowledge across peers
 			min := minVC(vcs...)
-			r.cleanup(min.vc)
+			r.cleanup(min.Vc)
 		}
 	}()
 

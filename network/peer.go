@@ -21,8 +21,8 @@ type Config struct {
 }
 
 type Message struct {
-	e  crdt.Elem
-	vc crdt.VecClock
+	E  crdt.Elem
+	Vc crdt.VecClock
 }
 
 var (
@@ -52,6 +52,10 @@ func makePeer(c Config) *Peer {
 		gc:        crdt.StartGC(rga),
 	}
 
+	return &peer
+}
+
+func (peer *Peer) initPeer() {
 	// proactively attempt starting connections on creation
 	// if peer goes down and back up, it will attempt to reconnect here
 	// (need seperate logic for network partition if we care -- ie: disconnected but not restarted)
@@ -73,7 +77,7 @@ func makePeer(c Config) *Peer {
 		go peer.readPeer(c)
 	}
 
-	return &peer
+	go peer.writeProc()
 }
 
 // create handler wrapping peer object to read messages from other peer
@@ -95,24 +99,31 @@ func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 // reads messages from peer in loop until connection fails
 func (p *Peer) readPeer(c *websocket.Conn) error {
 	for {
-		_, buf, err := c.ReadMessage()
+		mT, buf, err := c.ReadMessage()
+		log.Printf("Message type: %d", mT)
+		log.Printf("Read message on Peer %d", p.peer)
+
 		// TODO: make sure error means disconnection
 		if err != nil {
 			delete(p.conns, c)
 			return errors.New("connection is down")
 		}
 
+		log.Println("Read messsage successfully ")
+
 		dec := gob.NewDecoder(bytes.NewBuffer(buf))
 		var msg Message
 		err = dec.Decode(&msg)
 
 		if err != nil {
+			log.Println("Decode failed")
+			log.Fatal(err)
 			return errors.New("decode of peer's message failed")
 		}
 
 		log.Println(msg)
-		elem := msg.e
-		vc := msg.vc
+		elem := msg.E
+		vc := msg.Vc
 		p.gc <- vc
 
 		// ignores message if it has already been received
@@ -135,12 +146,15 @@ func (p *Peer) serve() {
 func (p *Peer) writeProc() {
 	for {
 		e := <-p.broadcast
-		msg := Message{e: e, vc: p.rga.VectorClock()}
+		log.Println(e)
+		msg := Message{E: e, Vc: p.rga.VectorClock()}
 		for conn := range p.conns {
-			var buf bytes.Buffer
-			enc := gob.NewEncoder(&buf)
+			buf := bytes.NewBuffer([]byte{})
+			enc := gob.NewEncoder(buf)
 			enc.Encode(msg)
-			e := conn.WriteMessage(websocket.BinaryMessage, buf.Bytes())
+
+			e := conn.WriteMessage(websocket.TextMessage, buf.Bytes())
+			// TODO make sure error always implies delete
 			if e != nil {
 				delete(p.conns, conn)
 			}
