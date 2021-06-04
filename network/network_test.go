@@ -60,7 +60,7 @@ func TestReadPeer(t *testing.T) {
 	elem, err := peer1.rga.Append('9', crdt.Id{})
 	ne(err)
 
-	time.Sleep(8 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	log.Println(peer2.rga.GetView())
 	as(peer2.rga.Contains(elem))

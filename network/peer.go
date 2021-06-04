@@ -29,6 +29,8 @@ var (
 	config = flag.String("addr", "", "address of server")
 )
 
+const BACKUP_SIZE = 1000
+
 type Peer struct {
 	peer      int
 	addrs     []string
@@ -36,7 +38,9 @@ type Peer struct {
 	upgrader  websocket.Upgrader
 	rga       *crdt.RGA
 	broadcast chan crdt.Elem
+	backup    chan crdt.Elem
 	gc        chan<- crdt.VecClock
+	dc        bool
 }
 
 func makePeer(c Config) *Peer {
@@ -48,8 +52,10 @@ func makePeer(c Config) *Peer {
 		upgrader:  websocket.Upgrader{},
 		conns:     make(map[*websocket.Conn]bool),
 		broadcast: broadcast,
+		backup:    make(chan crdt.Elem, BACKUP_SIZE),
 		rga:       rga,
 		gc:        crdt.StartGC(rga),
+		dc:        false,
 	}
 
 	return &peer
@@ -146,18 +152,30 @@ func (p *Peer) serve() {
 func (p *Peer) writeProc() {
 	for {
 		e := <-p.broadcast
-		log.Println(e)
-		msg := Message{E: e, Vc: p.rga.VectorClock()}
-		for conn := range p.conns {
-			buf := bytes.NewBuffer([]byte{})
-			enc := gob.NewEncoder(buf)
-			enc.Encode(msg)
-
-			e := conn.WriteMessage(websocket.TextMessage, buf.Bytes())
-			// TODO make sure error always implies delete
-			if e != nil {
-				delete(p.conns, conn)
+		if p.dc {
+			p.backup <- e
+			continue
+		} else if len(p.backup) > 0 {
+			for len(p.backup) > 0 {
+				p.Broadcast(<-p.backup)
 			}
+		}
+
+		p.Broadcast(e)
+	}
+}
+
+func (p *Peer) Broadcast(e crdt.Elem) {
+	msg := Message{E: e, Vc: p.rga.VectorClock()}
+	for conn := range p.conns {
+		buf := bytes.NewBuffer([]byte{})
+		enc := gob.NewEncoder(buf)
+		enc.Encode(msg)
+
+		e := conn.WriteMessage(websocket.TextMessage, buf.Bytes())
+		// TODO make sure error always implies delete
+		if e != nil {
+			delete(p.conns, conn)
 		}
 	}
 }
