@@ -3,9 +3,7 @@ package network
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
 	"errors"
-	"flag"
 	"log"
 	"net/http"
 	"net/url"
@@ -25,10 +23,6 @@ type Message struct {
 	Vc crdt.VecClock
 }
 
-var (
-	config = flag.String("addr", "", "address of server")
-)
-
 const BACKUP_SIZE = 1000
 
 type Peer struct {
@@ -43,7 +37,7 @@ type Peer struct {
 	dc        bool
 }
 
-func makePeer(c Config) *Peer {
+func MakePeer(c Config) *Peer {
 	broadcast := make(chan crdt.Elem)
 	rga := crdt.NewRGAOverNetwork(c.peer, len(c.addrs), broadcast)
 	peer := Peer{
@@ -61,7 +55,7 @@ func makePeer(c Config) *Peer {
 	return &peer
 }
 
-func (peer *Peer) initPeer() {
+func (peer *Peer) InitPeer() {
 	// proactively attempt starting connections on creation
 	// if peer goes down and back up, it will attempt to reconnect here
 	// (need seperate logic for network partition if we care -- ie: disconnected but not restarted)
@@ -141,7 +135,7 @@ func (p *Peer) readPeer(c *websocket.Conn) error {
 }
 
 // have peer start acting as server (can receive websocket connections)
-func (p *Peer) serve() {
+func (p *Peer) Serve() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", p.makeHandler())
 	http.ListenAndServe(p.addrs[p.peer], mux)
@@ -167,31 +161,15 @@ func (p *Peer) writeProc() {
 
 func (p *Peer) Broadcast(e crdt.Elem) {
 	msg := Message{E: e, Vc: p.rga.VectorClock()}
+	buf := bytes.NewBuffer([]byte{})
+	enc := gob.NewEncoder(buf)
+	enc.Encode(msg)
+	by := buf.Bytes()
 	for conn := range p.conns {
-		buf := bytes.NewBuffer([]byte{})
-		enc := gob.NewEncoder(buf)
-		enc.Encode(msg)
-
-		e := conn.WriteMessage(websocket.TextMessage, buf.Bytes())
+		e := conn.WriteMessage(websocket.TextMessage, by)
 		// TODO make sure error always implies delete
 		if e != nil {
 			delete(p.conns, conn)
 		}
 	}
-}
-
-// basic main for starting up a peer using config parsed from an argument
-func main() {
-	flag.Parse()
-	configString := flag.Arg(1)
-
-	var config Config
-	err := json.Unmarshal([]byte(configString), &config)
-	if err != nil {
-		log.Panic("cannot unmarshal config from flag")
-	}
-
-	p := makePeer(config)
-
-	p.serve()
 }

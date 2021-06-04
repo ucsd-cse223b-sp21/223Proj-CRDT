@@ -52,10 +52,10 @@ func TestReadPeer(t *testing.T) {
 	config.peer = 1
 	peer2 := makePeer(config)
 
-	go peer1.serve()
-	go peer2.serve()
-	peer1.initPeer()
-	peer2.initPeer()
+	go peer1.Serve()
+	go peer2.Serve()
+	peer1.InitPeer()
+	peer2.InitPeer()
 
 	elem, err := peer1.rga.Append('9', crdt.Id{})
 	ne(err)
