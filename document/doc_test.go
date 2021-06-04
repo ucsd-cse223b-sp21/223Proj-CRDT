@@ -2,6 +2,7 @@ package document
 
 import (
 	"log"
+	"proj/crdt"
 	"runtime/debug"
 	"testing"
 )
@@ -66,5 +67,45 @@ func TestDoc(t *testing.T) {
 	doc, err = doc.Remove(4)
 	ne(err)
 	as(doc.View() == "elloWorld")
+
+}
+
+func TestRgaDoc(t *testing.T) {
+	log.Println("testing document")
+
+	// create doc
+	r := crdt.NewRGA(0, 1)
+	doc := *NewRgaDoc(r)
+
+	as(doc.View() == "")
+
+	//append out of range test
+	_, err := doc.Append(-1, byte('n'))
+	er(err)
+	_, err = doc.Append(len(doc.View())+1, byte('n'))
+	er(err)
+
+	// append view test
+	cursor := 0
+	for _, cha := range "Hello World!" {
+		log.Println(cha)
+		newdoc, err := doc.Append(cursor, byte(cha))
+		doc = newdoc
+		cursor++
+		ne(err)
+	}
+	log.Println(doc.View())
+	as(doc.View() == "Hello World!")
+
+}
+
+func TestDocTwoUser(t *testing.T) {
+	doc_pointer := new(NiaveDoc)
+	var doc Document = *doc_pointer
+	as(doc.View() == "")
+
+}
+
+func TestDocLimit(t *testing.T) {
 
 }
