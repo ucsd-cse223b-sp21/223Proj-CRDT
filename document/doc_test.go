@@ -1,9 +1,12 @@
 package document
 
 import (
+	"encoding/json"
+	"flag"
 	"log"
 	"math"
 	"proj/crdt"
+	"proj/network"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -106,13 +109,29 @@ func TestRgaDoc(t *testing.T) {
 
 }
 
+func getPeer() *network.Peer {
+	flag.Parse()
+	configString := flag.Arg(1)
+
+	var config network.Config
+	err := json.Unmarshal([]byte(configString), &config)
+	if err != nil {
+		log.Panic("cannot unmarshal config from flag")
+	}
+
+	p := network.MakePeer(config)
+
+	p.Serve()
+	return p
+}
+
 func TestDocTwoUser(t *testing.T) {
 	// create doc for 2
 	numPeer := 2
 	doc := make([]RgaDoc, numPeer)
 	for i := 0; i < numPeer; i++ {
-		r := crdt.NewRGA(i, numPeer)
-		doc[i] = *NewRgaDoc(r)
+		peer := getPeer()
+		doc[i] = *NewRgaDoc(peer.Rga)
 
 		as(doc[i].View() == "")
 	}

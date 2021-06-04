@@ -34,12 +34,12 @@ type Peer struct {
 	addrs     []string
 	conns     map[*websocket.Conn]bool
 	upgrader  websocket.Upgrader
-	rga       *crdt.RGA
+	Rga       *crdt.RGA
 	broadcast chan crdt.Elem
 	gc        chan<- crdt.VecClock
 }
 
-func makePeer(c Config) *Peer {
+func MakePeer(c Config) *Peer {
 	broadcast := make(chan crdt.Elem)
 	rga := crdt.NewRGAOverNetwork(c.peer, len(c.addrs), broadcast)
 	peer := Peer{
@@ -48,7 +48,7 @@ func makePeer(c Config) *Peer {
 		upgrader:  websocket.Upgrader{},
 		conns:     make(map[*websocket.Conn]bool),
 		broadcast: broadcast,
-		rga:       rga,
+		Rga:       rga,
 		gc:        crdt.StartGC(rga),
 	}
 
@@ -116,15 +116,15 @@ func (p *Peer) readPeer(c *websocket.Conn) error {
 		p.gc <- vc
 
 		// ignores message if it has already been received
-		if !p.rga.Contains(elem) {
+		if !p.Rga.Contains(elem) {
 			p.broadcast <- elem
-			p.rga.Update(elem)
+			p.Rga.Update(elem)
 		}
 	}
 }
 
 // have peer start acting as server (can receive websocket connections)
-func (p *Peer) serve() {
+func (p *Peer) Serve() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", p.makeHandler())
 	http.ListenAndServe(p.addrs[p.peer], mux)
@@ -135,7 +135,7 @@ func (p *Peer) serve() {
 func (p *Peer) writeProc() {
 	for {
 		e := <-p.broadcast
-		msg := Message{e: e, vc: p.rga.VectorClock()}
+		msg := Message{e: e, vc: p.Rga.VectorClock()}
 		for conn := range p.conns {
 			var buf bytes.Buffer
 			enc := gob.NewEncoder(&buf)
@@ -159,7 +159,7 @@ func main() {
 		log.Panic("cannot unmarshal config from flag")
 	}
 
-	p := makePeer(config)
+	p := MakePeer(config)
 
-	p.serve()
+	p.Serve()
 }

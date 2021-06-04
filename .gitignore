@@ -20,3 +20,6 @@ pkg/
 
 # Ignore test logging
 log/
+
+#ignore github import
+github.com/

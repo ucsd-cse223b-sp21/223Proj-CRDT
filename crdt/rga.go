@@ -2,7 +2,6 @@ package crdt
 
 import (
 	"errors"
-	"log"
 	"sync"
 )
 
@@ -232,7 +231,6 @@ func (r *RGA) Update(e Elem) error {
 
 	// update clock/vc for new append
 	r.clock(e.ID.Time)
-	log.Println("e.ID.Peer_", e.ID.Peer_)
 	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.After]
