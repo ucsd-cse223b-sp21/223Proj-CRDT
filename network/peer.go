@@ -29,53 +29,63 @@ var (
 	config = flag.String("addr", "", "address of server")
 )
 
-var peer int
-var addrs []string
-var conns map[*websocket.Conn]bool
-var upgrader = websocket.Upgrader{}
-var rga *crdt.RGA
-var broadcast chan crdt.Elem
-var gc chan<- crdt.VecClock
+type Peer struct {
+	peer      int
+	addrs     []string
+	conns     map[*websocket.Conn]bool
+	upgrader  websocket.Upgrader
+	rga       *crdt.RGA
+	broadcast chan crdt.Elem
+	gc        chan<- crdt.VecClock
+}
 
-func initialize(c Config) {
-	peer = c.peer
-	addrs = c.addrs
+func makePeer(c Config) *Peer {
+	broadcast := make(chan crdt.Elem)
+	rga := crdt.NewRGAOverNetwork(c.peer, len(c.addrs), broadcast)
+	peer := Peer{
+		peer:      c.peer,
+		addrs:     c.addrs,
+		upgrader:  websocket.Upgrader{},
+		conns:     make(map[*websocket.Conn]bool),
+		broadcast: broadcast,
+		rga:       rga,
+		gc:        crdt.StartGC(rga),
+	}
 
-	conns = make(map[*websocket.Conn]bool)
-	broadcast = make(chan crdt.Elem)
-	rga = crdt.NewRGAOverNetwork(peer, len(addrs), broadcast)
-	gc = crdt.StartGC(rga)
-
-	for i, a := range addrs {
+	for i, a := range peer.addrs {
 		u := url.URL{Scheme: "ws", Host: a, Path: "/ws"}
 		c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 		if err != nil {
 			log.Printf("connection on join to peer %d failed : %s", i, err)
 			continue
 		}
-		conns[c] = true
+		peer.conns[c] = true
 		go readPeer(c)
 	}
+
+	return &peer
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("websocket handler failed on upgrade")
-		return
+func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c, err := p.upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Print("websocket handler failed on upgrade")
+			return
+		}
+
+		p.conns[c] = true
+
+		// loop and read from peer initiated that connection
+		p.readPeer(c)
 	}
-
-	conns[c] = true
-
-	// loop and read from peer initiated that connection
-	readPeer(c)
 }
 
-func readPeer(c *websocket.Conn) error {
+func (p *Peer) readPeer(c *websocket.Conn) error {
 	for {
 		_, buf, err := c.ReadMessage()
 		if err != nil {
-			delete(conns, c)
+			delete(p.conns, c)
 			return errors.New("connection is down")
 		}
 
@@ -90,33 +100,33 @@ func readPeer(c *websocket.Conn) error {
 		log.Println(msg)
 		elem := msg.e
 		vc := msg.vc
-		gc <- vc
+		p.gc <- vc
 
 		// ignores message if it has already been received
-		if !rga.Contains(elem) {
-			broadcast <- elem
-			rga.Update(elem)
+		if !p.rga.Contains(elem) {
+			p.broadcast <- elem
+			p.rga.Update(elem)
 		}
 	}
 }
 
-func serve() {
+func (p *Peer) serve() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", wsHandler)
-	http.ListenAndServe(addrs[peer], mux)
+	mux.HandleFunc("/ws", p.makeHandler())
+	http.ListenAndServe(p.addrs[p.peer], mux)
 }
 
-func writeProc() {
+func (p *Peer) writeProc() {
 	for {
-		e := <-broadcast
-		msg := Message{e: e, vc: rga.VectorClock()}
-		for conn := range conns {
+		e := <-p.broadcast
+		msg := Message{e: e, vc: p.rga.VectorClock()}
+		for conn := range p.conns {
 			var buf bytes.Buffer
 			enc := gob.NewEncoder(&buf)
 			enc.Encode(msg)
 			e := conn.WriteMessage(websocket.BinaryMessage, buf.Bytes())
 			if e != nil {
-				delete(conns, conn)
+				delete(p.conns, conn)
 			}
 		}
 	}
@@ -132,7 +142,7 @@ func main() {
 		log.Panic("cannot unmarshal config from flag")
 	}
 
-	initialize(config)
+	p := makePeer(config)
 
-	serve()
+	p.serve()
 }
