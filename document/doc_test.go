@@ -2,11 +2,19 @@ package document
 
 import (
 	"log"
+	"math"
 	"proj/crdt"
 	"runtime/debug"
 	"testing"
 	"time"
 )
+
+// Here are some promise we made in proposal
+const ViewProTime = 500 * time.Millisecond     // time when change from other should be updated
+const LocalViewProTime = 50 * time.Millisecond //time when local view should be updated
+const CharRateLimit = int(400 / 60)            //400 character per min
+const MaxUser = 10                             //max concurrent users
+var MaxCharFile = 10 * math.Pow(1024, 2)       //10MB
 
 func ne(e error) {
 	if e != nil {
@@ -116,6 +124,7 @@ func TestDocTwoUser(t *testing.T) {
 
 	log.Println(doc[0].View())
 	log.Println(doc[1].View())
+	time.Sleep(ViewProTime)
 	as(doc[0].View() == doc[1].View())
 }
 
