@@ -1,6 +1,7 @@
 package document
 
 import (
+	"errors"
 	"proj/crdt"
 )
 
@@ -14,7 +15,7 @@ type Document interface {
 
 var _ Document = new(RgaDoc)
 
-func newRgaDoc(rga *crdt.RGA) *Document {
+func newRgaDoc(rga crdt.RGA) *RgaDoc {
 	return &RgaDoc{
 		content: "",
 		idList:  make([]crdt.Id, 0),
@@ -22,10 +23,18 @@ func newRgaDoc(rga *crdt.RGA) *Document {
 	}
 }
 
+func NewRgaDoc(r *crdt.RGA) *RgaDoc {
+	idList := make([]crdt.Id, 1)
+	idList[0] = r.Head.Elem.ID
+
+	doc := RgaDoc{"", idList, *r}
+	return &doc
+}
+
 type RgaDoc struct {
 	content string
 	idList  []crdt.Id
-	r       *crdt.RGA
+	r       crdt.RGA
 }
 
 func (d *RgaDoc) View() string {
@@ -33,6 +42,10 @@ func (d *RgaDoc) View() string {
 }
 
 func (d *RgaDoc) Append(after int, val byte) error {
+	if after < 0 || after >= len(d.idList) {
+		return errors.New("after out of range")
+	}
+
 	var afterId crdt.Id
 	if after == 0 {
 		afterId = crdt.Id{}
@@ -57,6 +70,10 @@ func (d *RgaDoc) Append(after int, val byte) error {
 }
 
 func (d *RgaDoc) Remove(at int) error {
+	if at < 0 || at > len(d.idList) {
+		return errors.New("after out of range")
+	}
+
 	id := d.idList[at]
 
 	_, err := d.r.Remove(id)
@@ -75,5 +92,7 @@ func (d *RgaDoc) Remove(at int) error {
 	return nil
 }
 
-func (d *RgaDoc) UpdateView() error {
+func (d *RgaDoc) UpdateView(elem crdt.Elem) error {
+	d.content, d.idList = d.r.GetView()
+	return nil
 }
