@@ -2,45 +2,26 @@ package document
 
 import (
 	"errors"
-	"log"
 	"proj/crdt"
 )
 
 type Document interface {
 	View() string
 
-	Append(after int, val byte) (Document, error)
+	Append(after int, val byte) error
 
-	Remove(at int) (Document, error)
+	Remove(at int) error
 }
 
-type NiaveDoc struct {
-	content string
-}
+var _ Document = new(RgaDoc)
 
-func (d NiaveDoc) View() string {
-	return d.content
-}
-
-func (d NiaveDoc) Append(after int, val byte) (Document, error) {
-	if after > len(d.content) || after < 0 {
-		return nil, errors.New("cannot append outside of doc")
+func newRgaDoc(rga crdt.RGA) *RgaDoc {
+	return &RgaDoc{
+		content: "",
+		idList:  make([]crdt.Id, 0),
+		r:       rga,
 	}
-	c := d.content
-	c = c[:after] + string(rune(val)) + c[after:]
-	return NiaveDoc{c}, nil
 }
-
-func (d NiaveDoc) Remove(at int) (Document, error) {
-	if at > len(d.content) || at < 0 {
-		return nil, errors.New("cannot remove non-existent character")
-	}
-	c := d.content
-	c = c[:at] + c[at+1:]
-	return NiaveDoc{c}, nil
-}
-
-var _ Document = new(NiaveDoc)
 
 func NewRgaDoc(r *crdt.RGA) *RgaDoc {
 	idList := make([]crdt.Id, 1)
@@ -56,59 +37,62 @@ type RgaDoc struct {
 	r       crdt.RGA
 }
 
-func (d RgaDoc) View() string {
-	text, idL := d.r.GetView()
-	d.idList = idL
-	return text
+func (d *RgaDoc) View() string {
+	return d.content
 }
 
-func (d RgaDoc) Append(after int, val byte) (RgaDoc, error) {
-	if after > len(d.content) || after < 0 {
-		return RgaDoc{}, errors.New("cannot append outside of doc")
+func (d *RgaDoc) Append(after int, val byte) error {
+	if after < 0 || after >= len(d.idList) {
+		return errors.New("after out of range")
 	}
 
-	elem, err := d.AppendToRga(val, d.idList[after])
+	var afterId crdt.Id
+	if after == 0 {
+		afterId = crdt.Id{}
+	} else {
+		afterId = d.idList[after]
+	}
+
+	elem, err := d.r.Append(val, afterId)
 	if err != nil {
-		return RgaDoc{}, err
+		return err
 	}
 
-	tempIdList := append(d.idList[:after], elem.ID)
-	tempIdList = append(tempIdList, d.idList[after:]...)
+	if after == (len(d.content) - 1) {
+		d.content = d.content[:after] + string(val)
+		d.idList = append(d.idList[:after], elem.ID)
+	} else {
+		d.content = d.content[:after] + string(val) + d.content[after:]
+		d.idList = append(append(d.idList[:after], elem.ID), d.idList[after:]...)
+	}
 
-	c := d.content
-	c = c[:after] + string(rune(val)) + c[after:]
-
-	return RgaDoc{c, tempIdList, d.r}, nil
+	return nil
 }
 
-func (d RgaDoc) Remove(at int) (RgaDoc, error) {
-	if at > len(d.content) || at < 0 {
-		return RgaDoc{}, errors.New("cannot remove non-existent character")
+func (d *RgaDoc) Remove(at int) error {
+	if at < 0 || at > len(d.idList) {
+		return errors.New("after out of range")
 	}
 
-	err := d.RemoveToRga(d.idList[at])
-	if err != nil {
-		return RgaDoc{}, err
-	}
+	id := d.idList[at]
 
-	c := d.content
-	c = c[:at] + c[at+1:]
-	return RgaDoc{c, d.idList, d.r}, nil
-}
-
-func (d RgaDoc) AppendToRga(char byte, after crdt.Id) (crdt.Elem, error) {
-	log.Println("after", after)
-	elem, err := d.r.Append(char, after)
-	if err != nil {
-		return crdt.Elem{}, err
-	}
-	return elem, nil
-}
-
-func (d RgaDoc) RemoveToRga(id crdt.Id) error {
 	_, err := d.r.Remove(id)
 	if err != nil {
 		return err
 	}
+
+	if at == (len(d.content) - 1) {
+		d.content = d.content[:at]
+		d.idList = d.idList[:at]
+	} else {
+		d.content = d.content[:at] + d.content[at+1:]
+		d.idList = append(d.idList[:at], d.idList[at+1:]...)
+	}
+
+	return nil
+}
+
+func (d *RgaDoc) UpdateView(elem crdt.Elem) error {
+	d.content, d.idList = d.r.GetView()
 	return nil
 }

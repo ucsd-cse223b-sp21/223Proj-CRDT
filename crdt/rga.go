@@ -34,8 +34,8 @@ type RGA struct {
 	mut      sync.Mutex
 	Head     Node
 	m        map[Id]*Node
-	remQ     [][]*Node // TODO : make gc more efficient with array of arrows indexed by seq
-	// remQ      []*Node
+	remQ     [][]*Node
+	// remQ      []*Node   // TODO : make gc more efficient with array of arrows indexed by seq
 	vecC      VecClock
 	broadcast chan<- Elem
 }
