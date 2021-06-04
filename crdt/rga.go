@@ -2,6 +2,7 @@ package crdt
 
 import (
 	"errors"
+	"log"
 	"sync"
 )
 
@@ -13,7 +14,7 @@ type Elem struct {
 }
 
 type Node struct {
-	elem Elem
+	Elem Elem
 	prev *Node
 	next *Node
 }
@@ -31,7 +32,7 @@ type RGA struct {
 	time     uint64
 	seq      uint64
 	mut      sync.Mutex
-	head     Node
+	Head     Node
 	m        map[Id]*Node
 	remQ     [][]*Node // TODO : make gc more efficient with array of arrows indexed by seq
 	// remQ      []*Node
@@ -58,12 +59,12 @@ func (r *RGA) getNewChange() Id {
 func (r *RGA) GetView() (string, []Id) {
 	var b []byte
 	var i []Id
-	curr := &r.head
+	curr := &r.Head
 	for curr != nil {
 		//if element is not deleted, append character
-		if (curr.elem.Rem == Id{}) {
-			b = append(b, curr.elem.Val)
-			i = append(i, curr.elem.ID)
+		if (curr.Elem.Rem == Id{}) {
+			b = append(b, curr.Elem.Val)
+			i = append(i, curr.Elem.ID)
 		}
 		curr = curr.next
 	}
@@ -72,11 +73,11 @@ func (r *RGA) GetView() (string, []Id) {
 
 func (r *RGA) getString() string {
 	var b []byte
-	curr := &r.head
+	curr := &r.Head
 	for curr != nil {
 		//if element is not deleted, append character
-		if (curr.elem.Rem == Id{}) {
-			b = append(b, curr.elem.Val)
+		if (curr.Elem.Rem == Id{}) {
+			b = append(b, curr.Elem.Val)
 		}
 		curr = curr.next
 	}
@@ -93,7 +94,7 @@ func newRGAList(numPeers int) []*RGA {
 }
 
 func (r *RGA) Contains(e Elem) bool {
-	if n, ok := r.m[e.ID]; ok && n.elem.Rem == e.Rem {
+	if n, ok := r.m[e.ID]; ok && n.Elem.Rem == e.Rem {
 		return true
 	}
 	return false
@@ -110,8 +111,8 @@ func NewRGA(peer int, numPeers int) *RGA {
 		vecC: newVecClock(peer, numPeers),
 	}
 
-	r.head.elem = Elem{ID: Id{0, 0, 0}, After: Id{}, Rem: Id{}, Val: 0}
-	r.m[r.head.elem.ID] = &r.head
+	r.Head.Elem = Elem{ID: Id{0, 0, 0}, After: Id{}, Rem: Id{}, Val: 0}
+	r.m[r.Head.Elem.ID] = &r.Head
 
 	return &r
 }
@@ -137,17 +138,17 @@ func (r *RGA) Append(val byte, after Id) (Elem, error) {
 
 // "removes" an elem by setting its rem field to describe the new operation
 func (r *RGA) Remove(id Id) (Elem, error) {
-	if id == r.head.elem.ID {
+	if id == r.Head.Elem.ID {
 		return Elem{}, errors.New("r.head are not removable")
 	}
 	if n, ok := r.m[id]; ok {
-		n.elem.Rem = r.getNewChange()
+		n.Elem.Rem = r.getNewChange()
 
 		// broadcast local change
 		if r.broadcast != nil {
-			r.broadcast <- n.elem
+			r.broadcast <- n.Elem
 		}
-		return n.elem, nil
+		return n.Elem, nil
 	} else {
 		return Elem{}, errors.New("cannot remove non-existent node. check local call to remove")
 	}
@@ -200,9 +201,9 @@ func sortedInsert(list []*Node, node *Node) []*Node {
 	high := len(list) - 1
 	for low < high {
 		median := (low + high) / 2
-		if list[median].elem.Rem.Seq < node.elem.Rem.Seq {
+		if list[median].Elem.Rem.Seq < node.Elem.Rem.Seq {
 			low = median - 1
-		} else if list[median].elem.Rem.Seq > node.elem.Rem.Seq {
+		} else if list[median].Elem.Rem.Seq > node.Elem.Rem.Seq {
 			high = median + 1
 		} else {
 			return list
@@ -218,8 +219,8 @@ func (r *RGA) Update(e Elem) error {
 	// if node already exists, updates it (maintains idempotency)
 	if n, ok := r.m[e.ID]; ok {
 		// the remove update is new
-		if n.elem.Rem.Time == 0 && e.Rem.Time != 0 {
-			n.elem = e
+		if n.Elem.Rem.Time == 0 && e.Rem.Time != 0 {
+			n.Elem = e
 			// r.remQ = append(r.remQ, n)
 			r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
 			// update clock/vc for new remove
@@ -231,8 +232,8 @@ func (r *RGA) Update(e Elem) error {
 
 	// update clock/vc for new append
 	r.clock(e.ID.Time)
+	log.Println("e.ID.Peer_", e.ID.Peer_)
 	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
-
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.After]
 	if !ok {
@@ -242,12 +243,12 @@ func (r *RGA) Update(e Elem) error {
 	// find insert location
 	prev := after
 	next := prev.next
-	for next != nil && next.elem.After == next.prev.elem.ID && next.elem.isNewerThan(e) {
+	for next != nil && next.Elem.After == next.prev.Elem.ID && next.Elem.isNewerThan(e) {
 		prev = next
 		next = next.next
 	}
 
-	node := &Node{elem: e, next: next, prev: prev}
+	node := &Node{Elem: e, next: next, prev: prev}
 	if next != nil {
 		next.prev = node
 	}
