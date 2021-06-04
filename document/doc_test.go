@@ -3,7 +3,6 @@ package document
 import (
 	"log"
 	"runtime/debug"
-	"testing"
 )
 
 func ne(e error) {
@@ -25,46 +24,46 @@ func as(cond bool) {
 	}
 }
 
-func TestDoc(t *testing.T) {
-	log.Println("testing document")
+// func TestDoc(t *testing.T) {
+// 	log.Println("testing document")
 
-	// create doc
-	doc_pointer := new(NiaveDoc)
-	var doc Document = *doc_pointer
-	as(doc.View() == "")
+// 	// create doc
+// 	doc_pointer := new(NiaveDoc)
+// 	var doc Document = *doc_pointer
+// 	as(doc.View() == "")
 
-	//append out of range test
-	_, err := doc.Append(-1, byte('n'))
-	er(err)
-	_, err = doc.Append(len(doc.View())+1, byte('n'))
-	er(err)
+// 	//append out of range test
+// 	_, err := doc.Append(-1, byte('n'))
+// 	er(err)
+// 	_, err = doc.Append(len(doc.View())+1, byte('n'))
+// 	er(err)
 
-	// append view test
-	cursor := 0
-	for _, cha := range "Hello World!" {
-		newdoc, err := doc.Append(cursor, byte(cha))
-		doc = newdoc
-		cursor++
-		ne(err)
-	}
-	log.Println(doc.View())
-	as(doc.View() == "Hello World!")
+// 	// append view test
+// 	cursor := 0
+// 	for _, cha := range "Hello World!" {
+// 		newdoc, err := doc.Append(cursor, byte(cha))
+// 		doc = newdoc
+// 		cursor++
+// 		ne(err)
+// 	}
+// 	log.Println(doc.View())
+// 	as(doc.View() == "Hello World!")
 
-	// remove out of range test
-	_, err = doc.Remove(-1)
-	er(err)
-	_, err = doc.Remove(len("Hello World!") + 1)
-	er(err)
+// 	// remove out of range test
+// 	_, err = doc.Remove(-1)
+// 	er(err)
+// 	_, err = doc.Remove(len("Hello World!") + 1)
+// 	er(err)
 
-	// remove view test
-	doc, err = doc.Remove(len("Hello World!") - 1)
-	ne(err)
-	as(doc.View() == "Hello World")
+// 	// remove view test
+// 	doc, err = doc.Remove(len("Hello World!") - 1)
+// 	ne(err)
+// 	as(doc.View() == "Hello World")
 
-	doc, err = doc.Remove(0)
-	ne(err)
-	doc, err = doc.Remove(4)
-	ne(err)
-	as(doc.View() == "elloWorld")
+// 	doc, err = doc.Remove(0)
+// 	ne(err)
+// 	doc, err = doc.Remove(4)
+// 	ne(err)
+// 	as(doc.View() == "elloWorld")
 
-}
+// }
