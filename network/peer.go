@@ -3,9 +3,7 @@ package network
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
 	"errors"
-	"flag"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,10 +22,6 @@ type Message struct {
 	E  crdt.Elem
 	Vc crdt.VecClock
 }
-
-var (
-	config = flag.String("addr", "", "address of server")
-)
 
 const BACKUP_SIZE = 1000
 
@@ -166,32 +160,16 @@ func (p *Peer) writeProc() {
 }
 
 func (p *Peer) Broadcast(e crdt.Elem) {
-	msg := Message{E: e, Vc: p.Rga.VectorClock()}
+	msg := Message{E: e, Vc: p.rga.VectorClock()}
+	buf := bytes.NewBuffer([]byte{})
+	enc := gob.NewEncoder(buf)
+	enc.Encode(msg)
+	by := buf.Bytes()
 	for conn := range p.conns {
-		buf := bytes.NewBuffer([]byte{})
-		enc := gob.NewEncoder(buf)
-		enc.Encode(msg)
-
-		e := conn.WriteMessage(websocket.TextMessage, buf.Bytes())
+		e := conn.WriteMessage(websocket.TextMessage, by)
 		// TODO make sure error always implies delete
 		if e != nil {
 			delete(p.conns, conn)
 		}
 	}
-}
-
-// basic main for starting up a peer using config parsed from an argument
-func main() {
-	flag.Parse()
-	configString := flag.Arg(1)
-
-	var config Config
-	err := json.Unmarshal([]byte(configString), &config)
-	if err != nil {
-		log.Panic("cannot unmarshal config from flag")
-	}
-
-	p := MakePeer(config)
-
-	p.Serve()
 }

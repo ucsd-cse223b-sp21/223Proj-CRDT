@@ -2,6 +2,7 @@ package crdt
 
 import (
 	"errors"
+	"log"
 	"sync"
 )
 
@@ -122,6 +123,11 @@ func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- Elem) *RGA {
 	return r
 }
 
+func (r *RGA) Length() int {
+	L := len(r.m)
+	return L
+}
+
 // LOCAL OPERATIONS
 
 // appends a new char after an elem by creating a new elem locally
@@ -168,7 +174,16 @@ func (r *RGA) cleanup(min []uint64) {
 	// 	}
 	// }
 	for i, m := range min {
-		r.remQ[i] = r.remQ[i][m:]
+		for j, n := range r.remQ[i] {
+			if m >= n.Elem.Rem.Seq {
+				n.next.prev = n.prev
+				n.prev.next = n.next
+				delete(r.m, n.Elem.ID)
+			} else {
+				r.remQ[i] = r.remQ[i][j:]
+				break
+			}
+		}
 	}
 }
 
@@ -215,28 +230,27 @@ func sortedInsert(list []*Node, node *Node) []*Node {
 // merge in any elem into RGA (used by local append and any downstream ops)
 func (r *RGA) Update(e Elem) error {
 
-	// if node already exists, updates it (maintains idempotency)
-	if n, ok := r.m[e.ID]; ok {
-		// the remove update is new
-		if n.Elem.Rem.Time == 0 && e.Rem.Time != 0 {
-			n.Elem = e
-			// r.remQ = append(r.remQ, n)
-			r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
-			// update clock/vc for new remove
-			r.clock(e.Rem.Time)
-			r.vecC.incrementTo(e.Rem.Peer_, e.Rem.Seq)
-		}
+	// node already exists and its being removed (modify node ala tombstone)
+	if n, ok := r.m[e.ID]; ok && e.Rem.Time != 0 {
+		n.Elem = e
+		// r.remQ = append(r.remQ, n)
+		r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
+		// update clock/vc for new remove
+		r.clock(e.Rem.Time)
+		r.vecC.incrementTo(e.Rem.Peer_, e.Rem.Seq)
 		return nil
 	}
 
-	// update clock/vc for new append
-	r.clock(e.ID.Time)
-	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.After]
 	if !ok {
 		return errors.New("cannot find parent elem")
 	}
+
+	// update clock/vc for new append
+	r.clock(e.ID.Time)
+	log.Println("e.ID.Peer_", e.ID.Peer_)
+	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
 
 	// find insert location
 	prev := after

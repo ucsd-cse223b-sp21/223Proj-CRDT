@@ -27,34 +27,37 @@ func as(cond bool) {
 
 func TestSingleUser(t *testing.T) {
 	// creating new rga
-	r := newRGA(1, 1)
+	r := NewRGA(1, 1)
+	as(r.Length() == 0)
+
 	as(r.getString() == "")
 
 	//attempt to remove head
-	_, err := r.remove(r.head.elem.id)
+	_, err := r.Remove(r.Head.Elem.ID)
 	er(err)
 	as(r.getString() == "")
 
 	//typing '123'
-	elem, err := r.append(byte('1'), r.head.elem.id)
+	elem, err := r.Append(byte('1'), r.Head.Elem.ID)
 	ne(err)
 	as(r.getString() == "1")
-	elem, err = r.append(byte('2'), elem.id)
+	elem, err = r.Append(byte('2'), elem.ID)
 	ne(err)
-	elem, err = r.append(byte('3'), elem.id)
+	elem, err = r.Append(byte('3'), elem.ID)
 	ne(err)
 
 	//rga should contain '123'
 	as(r.getString() == "123")
 
 	//single remove
-	_, err = r.remove(elem.id)
+	_, err = r.Remove(elem.ID)
+
 	ne(err)
 
 	as(r.getString() == "12")
 
 	//double deleting the same element
-	_, err = r.remove(elem.id)
+	_, err = r.Remove(elem.ID)
 	ne(err)
 
 	as(r.getString() == "12")
@@ -65,7 +68,7 @@ func UpdateAllOtherPeer(peer int, rgaList []*RGA, elem Elem) error {
 		if i == peer {
 			continue
 		}
-		err := r.update(elem)
+		err := r.Update(elem)
 		if err != nil {
 			return err
 		}
@@ -74,11 +77,11 @@ func UpdateAllOtherPeer(peer int, rgaList []*RGA, elem Elem) error {
 }
 
 func AppendAndUpate(char byte, after Id, r *RGA, rList []*RGA) (Elem, error) {
-	elem, err := r.append(char, after)
+	elem, err := r.Append(char, after)
 	if err != nil {
 		return Elem{}, err
 	}
-	err = UpdateAllOtherPeer(r.peer, rList, elem)
+	err = UpdateAllOtherPeer(r.Peer, rList, elem)
 	if err != nil {
 		return Elem{}, err
 	}
@@ -86,11 +89,11 @@ func AppendAndUpate(char byte, after Id, r *RGA, rList []*RGA) (Elem, error) {
 }
 
 func RemoveAndUpdate(id Id, r *RGA, rList []*RGA) error {
-	elem, err := r.remove(id)
+	elem, err := r.Remove(id)
 	if err != nil {
 		return err
 	}
-	err = UpdateAllOtherPeer(r.peer, rList, elem)
+	err = UpdateAllOtherPeer(r.Peer, rList, elem)
 	if err != nil {
 		return err
 	}
@@ -106,8 +109,7 @@ func AppendStringAndUpdate(text string, after Id, r *RGA, rList []*RGA) ([]Elem,
 			return elemList, err
 		}
 		elemList[i] = elem
-		elemID = elem.id
-
+		elemID = elem.ID
 	}
 	return elemList, nil
 }
@@ -132,19 +134,19 @@ func TestTwoUser(t *testing.T) {
 	///////////////// Append View test
 
 	//peer 0 type A and expect peer 1 to see A
-	elem, err := AppendAndUpate(byte('A'), r[0].head.elem.id, r[0], r)
+	elem, err := AppendAndUpate(byte('A'), r[0].Head.Elem.ID, r[0], r)
 	ne(err)
 	AllPeerViewTest(t, r, "A")
 
 	//peer 1 type B and expect peer 0 to see AB
 	//(because on how we sort message prority when before if the same)
-	_, err = AppendAndUpate(byte('B'), r[1].head.elem.id, r[1], r)
+	_, err = AppendAndUpate(byte('B'), r[1].Head.Elem.ID, r[1], r)
 	ne(err)
 	//log.Println(r[0].getString())
 	AllPeerViewTest(t, r, "AB")
 
 	//peer 0 types HelloWorld after A, should see
-	_, err = AppendStringAndUpdate("HelloWorld", elem.id, r[0], r)
+	_, err = AppendStringAndUpdate("HelloWorld", elem.ID, r[0], r)
 	ne(err)
 	//log.Println(r[0].getString())
 	AllPeerViewTest(t, r, "AHelloWorldB")
@@ -152,7 +154,7 @@ func TestTwoUser(t *testing.T) {
 	//////////////// Delete View test
 
 	//peer 1 trys to remove the 'A' peer 0 typed
-	err = RemoveAndUpdate(elem.id, r[1], r)
+	err = RemoveAndUpdate(elem.ID, r[1], r)
 	ne(err)
 	AllPeerViewTest(t, r, "HelloWorldB")
 
