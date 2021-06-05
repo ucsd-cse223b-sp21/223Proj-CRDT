@@ -251,7 +251,6 @@ func (r *RGA) Update(e Elem) error {
 		next.prev = node
 	}
 	prev.next = node
-
 	r.m[e.ID] = node
 	return nil
 }

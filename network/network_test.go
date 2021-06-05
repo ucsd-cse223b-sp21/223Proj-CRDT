@@ -28,14 +28,14 @@ func as(cond bool) {
 }
 
 /*func TestInitialize (t *testing.T) {
-	fmt.Printf("Starting server at port 8080\n")
+	fmt.Printf("Starting Server at port 8080\n")
     if err := http.ListenAndServe(":8080", nil); err != nil {
         er(err)
     }
-	var c peer.Config
-	c.peer = 0
+	var c Peer.Config
+	c.Peer = 0
 	c.addr.append("http://localhost:8080")
-	peer.initialize(c)
+	Peer.initialize(c)
 
 }
 */
@@ -45,25 +45,25 @@ func as(cond bool) {
 func TestReadPeer(t *testing.T) {
 	addrs := []string{"localhost:3000", "localhost:3001"}
 	config := Config{
-		peer:  0,
-		addrs: addrs,
+		Peer:  0,
+		Addrs: addrs,
 	}
-	peer1 := makePeer(config)
-	config.peer = 1
-	peer2 := makePeer(config)
+	Peer1 := MakePeer(config)
+	config.Peer = 1
+	Peer2 := MakePeer(config)
 
-	go peer1.serve()
-	go peer2.serve()
-	peer1.initPeer()
-	peer2.initPeer()
+	go Peer1.Serve()
+	go Peer2.Serve()
+	Peer1.InitPeer()
+	Peer2.InitPeer()
 
-	elem, err := peer1.rga.Append('9', crdt.Id{})
+	elem, err := Peer1.Rga.Append('9', crdt.Id{})
 	ne(err)
 
 	time.Sleep(1 * time.Second)
 
-	log.Println(peer2.rga.GetView())
-	as(peer2.rga.Contains(elem))
+	log.Println(Peer2.Rga.GetView())
+	as(Peer2.Rga.Contains(elem))
 
 	//var buf bytes.Buffer
 	/*

@@ -16,8 +16,8 @@ import (
 )
 
 type Config struct {
-	peer  int
-	addrs []string
+	Peer  int
+	Addrs []string
 }
 
 type Message struct {
@@ -45,15 +45,15 @@ type Peer struct {
 
 func MakePeer(c Config) *Peer {
 	broadcast := make(chan crdt.Elem)
-	rga := crdt.NewRGAOverNetwork(c.peer, len(c.addrs), broadcast)
+	rga := crdt.NewRGAOverNetwork(c.Peer, len(c.Addrs), broadcast)
 	peer := Peer{
-		peer:      c.peer,
-		addrs:     c.addrs,
+		peer:      c.Peer,
+		addrs:     c.Addrs,
 		upgrader:  websocket.Upgrader{},
 		conns:     make(map[*websocket.Conn]bool),
 		broadcast: broadcast,
 		backup:    make(chan crdt.Elem, BACKUP_SIZE),
-		rga:       rga,
+		Rga:       rga,
 		gc:        crdt.StartGC(rga),
 		dc:        false,
 	}
@@ -61,7 +61,7 @@ func MakePeer(c Config) *Peer {
 	return &peer
 }
 
-func (peer *Peer) initPeer() {
+func (peer *Peer) InitPeer() {
 	// proactively attempt starting connections on creation
 	// if peer goes down and back up, it will attempt to reconnect here
 	// (need seperate logic for network partition if we care -- ie: disconnected but not restarted)
@@ -166,7 +166,7 @@ func (p *Peer) writeProc() {
 }
 
 func (p *Peer) Broadcast(e crdt.Elem) {
-	msg := Message{E: e, Vc: p.rga.VectorClock()}
+	msg := Message{E: e, Vc: p.Rga.VectorClock()}
 	for conn := range p.conns {
 		buf := bytes.NewBuffer([]byte{})
 		enc := gob.NewEncoder(buf)
