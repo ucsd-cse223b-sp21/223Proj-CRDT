@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	addr    = flag.String("addr", "", "address of server")
+	//addr    = flag.String("addr", "", "address of server")
 	verbose = flag.Bool("v", false, "verbose logging")
 )
 

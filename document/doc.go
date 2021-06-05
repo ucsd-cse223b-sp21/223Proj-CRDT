@@ -92,7 +92,7 @@ func (d *RgaDoc) Remove(at int) error {
 	return nil
 }
 
-func (d *RgaDoc) UpdateView(elem crdt.Elem) error {
+func (d *RgaDoc) UpdateView() error {
 	d.content, d.idList = d.r.GetView()
 	return nil
 }

@@ -1,8 +1,7 @@
 package document
 
 import (
-	"encoding/json"
-	"flag"
+	"fmt"
 	"log"
 	"math"
 	"proj/crdt"
@@ -109,37 +108,35 @@ func TestRgaDoc(t *testing.T) {
 
 }
 
-func getPeer() *network.Peer {
-	flag.Parse()
-	configString := flag.Arg(1)
-
-	var config network.Config
-	err := json.Unmarshal([]byte(configString), &config)
-	if err != nil {
-		log.Panic("cannot unmarshal config from flag")
+func TestPeer2(t *testing.T) {
+	// getting 10 peers
+	addrs := []string{}
+	for i := 0; i < 10; i++ {
+		addrs = append(addrs, fmt.Sprintf("localhost:310%d", i))
 	}
 
-	p := network.MakePeer(config)
-
-	p.Serve()
-	return p
-}
-
-func TestDocTwoUser(t *testing.T) {
-	// create doc for 2
-	numPeer := 2
-	doc := make([]RgaDoc, numPeer)
-	for i := 0; i < numPeer; i++ {
-		peer := getPeer()
-		doc[i] = *NewRgaDoc(peer.Rga)
-
-		as(doc[i].View() == "")
+	config := network.Config{
+		Peer:  0,
+		Addrs: addrs,
 	}
 
-	typeThis(&doc[0], 0, "HELLOWORLD!")
-	typeThis(&doc[1], 0, "helloWorld!")
+	Peer := make([]*network.Peer, 10)
+	doc := make([]*RgaDoc, 10)
 
-	time.Sleep(500 * time.Millisecond)
+	for i := 0; i < 10; i++ {
+		config.Peer = i
+		Peer[i] = network.MakePeer(config)
+		go Peer[i].Serve()
+		Peer[i].InitPeer()
+		doc[i] = NewRgaDoc(Peer[i].Rga)
+	}
+
+	typeThis(doc[0], 0, "HELLOWORLD!")
+	typeThis(doc[1], 0, "helloWorld!")
+
+	time.Sleep(ViewProTime)
+	doc[0].UpdateView()
+	doc[1].UpdateView()
 
 	log.Println(doc[0].View())
 	log.Println(doc[1].View())
@@ -153,6 +150,34 @@ func typeThis(doc *RgaDoc, cursor int, text string) {
 		cursor++
 		ne(err)
 	}
+}
+
+func TestDocDisconnect(t *testing.T) {
+	// getting 10 peers
+	addrs := []string{}
+	for i := 0; i < 10; i++ {
+		addrs = append(addrs, fmt.Sprintf("localhost:320%d", i))
+	}
+
+	config := network.Config{
+		Peer:  0,
+		Addrs: addrs,
+	}
+
+	Peer := make([]*network.Peer, 10)
+	doc := make([]*RgaDoc, 10)
+
+	for i := 0; i < 10; i++ {
+		config.Peer = i
+		Peer[i] = network.MakePeer(config)
+		go Peer[i].Serve()
+		Peer[i].InitPeer()
+		doc[i] = NewRgaDoc(Peer[i].Rga)
+	}
+
+	typeThis(doc[0], 0, "This_is_the_base_for_testing")
+	typeThis(doc[1], 0, "Before_disconnect_")
+
 }
 
 func TestDocLimit(t *testing.T) {
