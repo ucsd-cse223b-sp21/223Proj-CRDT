@@ -160,7 +160,7 @@ func (p *Peer) writeProc() {
 }
 
 func (p *Peer) Broadcast(e crdt.Elem) {
-	msg := Message{E: e, Vc: p.rga.VectorClock()}
+	msg := Message{E: e, Vc: p.Rga.VectorClock()}
 	buf := bytes.NewBuffer([]byte{})
 	enc := gob.NewEncoder(buf)
 	enc.Encode(msg)
