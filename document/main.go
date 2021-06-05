@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	//addr    = flag.String("addr", "", "address of server")
-	verbose = flag.Bool("v", false, "verbose logging")
+//addr    = flag.String("addr", "", "address of server")
+//verbose = flag.Bool("v", false, "verbose logging")
 )
 
 func noError(e error) {

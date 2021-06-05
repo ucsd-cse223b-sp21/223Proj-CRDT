@@ -141,6 +141,8 @@ func TestPeer2(t *testing.T) {
 	log.Println(doc[0].View())
 	log.Println(doc[1].View())
 	time.Sleep(ViewProTime)
+	as(doc[0].View() != "")
+	as(doc[1].View() != "")
 	as(doc[0].View() == doc[1].View())
 }
 
@@ -175,9 +177,23 @@ func TestDocDisconnect(t *testing.T) {
 		doc[i] = NewRgaDoc(Peer[i].Rga)
 	}
 
-	typeThis(doc[0], 0, "This_is_the_base_for_testing")
+	typeThis(doc[0], 0, "base")
 	typeThis(doc[1], 0, "Before_disconnect_")
 
+	//Peer[1].Dc = true
+	typeThis(doc[1], 0, "After_disconnect_")
+	AllDocUpdateView(doc, true)
+	log.Println("doc[1] sees", doc[1].View())
+	as(doc[1].View() == "After_disconnect_Before_disconnect_base")
+}
+
+func AllDocUpdateView(docList []*RgaDoc, wait bool) {
+	if wait {
+		time.Sleep(ViewProTime)
+	}
+	for _, doc := range docList {
+		doc.UpdateView()
+	}
 }
 
 func TestDocLimit(t *testing.T) {
