@@ -29,55 +29,70 @@ func as(cond bool) {
 
 // -addr=localhost:3000
 
-func TestReadPeer(t *testing.T) {
-	addrs := []string{"localhost:3000", "localhost:3001"}
+func TestReadPeers(t *testing.T) {
+	addrs := []string{"localhost:3000", "localhost:3001", "localhost:3002", "localhost:4000", "localhost:4004", "localhost:4040", "localhost:8000", "localhost:8080", "localhost:8008", "localhost:3050",
+		"localhost:3004", "localhost:3005", "localhost:3006", "localhost:4001", "localhost:4005", "localhost:4080", "localhost:8040", "localhost:8090", "localhost:8009", "localhost:3090"}
 	config := Config{
 		Peer:  0,
 		Addrs: addrs,
 	}
-	Peer1 := MakePeer(config)
-	config.Peer = 1
-	Peer2 := MakePeer(config)
+	//Peer1 := MakePeer(config)
+	peer_list := make([]*Peer, len(addrs))
+	for i := 0; i < len(addrs); i++ {
+		config.Peer = i
+		peer_list[i] = MakePeer(config)
+		go peer_list[i].Serve()
+		peer_list[i].InitPeer()
+	}
 
-	go Peer1.Serve()
-	go Peer2.Serve()
-	Peer1.InitPeer()
-	Peer2.InitPeer()
-
-	elem, err := Peer1.Rga.Append('9', crdt.Id{})
+	elem, err := peer_list[0].Rga.Append('9', crdt.Id{})
 	ne(err)
+	/*
+		_, err2 := peer_list[0].Rga.Append('8', crdt.Id{})
+		ne(err2)
+		_, err1 := peer_list[0].Rga.Remove(elem.ID)
+		ne(err1)
 
-	time.Sleep(1 * time.Second)
+		s := peer_list[0].Rga.GetString()
 
-	log.Println(Peer2.Rga.GetView())
-	as(Peer2.Rga.Contains(elem))
+	*/
+	time.Sleep(2 * time.Second)
+
+	for i := 1; i < len(addrs); i++ {
+		log.Println(peer_list[i].Rga.GetView())
+		as(peer_list[i].Rga.Contains(elem))
+	}
+
 }
 
 func TestFaultTolerance(t *testing.T) {
-	addrs := []string{"localhost:8080", "localhost:8081"}
+
+	addrs := []string{"localhost:5000", "localhost:5001", "localhost:5002", "localhost:6000", "localhost:6004", "localhost:6040", "localhost:6000", "localhost:6080", "localhost:6008", "localhost:6050",
+		"localhost:5004", "localhost:5005", "localhost:5006", "localhost:6001", "localhost:6005", "localhost:7080", "localhost:7040", "localhost:7090", "localhost:7009", "localhost:7090"}
+
 	config := Config{
 		Peer:  0,
 		Addrs: addrs,
 	}
-	Peer1 := MakePeer(config)
-	config.Peer = 1
-	Peer2 := MakePeer(config)
+	peer_list := make([]*Peer, len(addrs))
+	for i := 0; i < len(addrs); i++ {
+		config.Peer = i
+		peer_list[i] = MakePeer(config)
+		go peer_list[i].Serve()
+		peer_list[i].InitPeer()
+	}
 
-	go Peer1.Serve()
-	go Peer2.Serve()
-	Peer1.InitPeer()
-	Peer2.InitPeer()
-
-	Peer1.dc = true
-	elem, err := Peer1.Rga.Append('1', crdt.Id{})
+	peer_list[0].dc = true
+	elem, err := peer_list[0].Rga.Append('1', crdt.Id{})
 	ne(err)
-	elem1, err1 := Peer1.Rga.Append('r', crdt.Id{})
-	elem_r, err_r := Peer1.Rga.Remove(elem.ID)
-	ne(err_r)
-	Peer1.dc = false
+	//elem1, err1 := Peer1.Rga.Append('r', crdt.Id{})
+	//elem_r, err_r := Peer1.Rga.Remove(elem.ID)
+	//ne(err_r)
+	peer_list[0].dc = false
 	time.Sleep(2 * time.Second)
 
-	log.Println(Peer2.Rga.GetView())
-	as(Peer2.Rga.Contains(elem))
-
+	for i := 1; i < len(addrs); i++ {
+		log.Println(peer_list[i].Rga.GetView())
+		as(peer_list[i].Rga.Contains(elem))
+	}
 }

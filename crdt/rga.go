@@ -71,7 +71,7 @@ func (r *RGA) GetView() (string, []Id) {
 	return string(b[1:]), i[1:]
 }
 
-func (r *RGA) getString() string {
+func (r *RGA) GetString() string {
 	var b []byte
 	curr := &r.Head
 	for curr != nil {

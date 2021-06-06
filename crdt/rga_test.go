@@ -28,39 +28,40 @@ func as(cond bool) {
 func TestSingleUser(t *testing.T) {
 	// creating new rga
 	r := NewRGA(1, 1)
-	as(r.Length() == 0)
 
-	as(r.getString() == "")
+	//as(r.Length() == 0)
+
+	as(r.GetString() == "")
 
 	//attempt to remove head
 	_, err := r.Remove(r.Head.Elem.ID)
 	er(err)
-	as(r.getString() == "")
+	as(r.GetString() == "")
 
 	//typing '123'
 	elem, err := r.Append(byte('1'), r.Head.Elem.ID)
 	ne(err)
-	as(r.getString() == "1")
+	as(r.GetString() == "1")
 	elem, err = r.Append(byte('2'), elem.ID)
 	ne(err)
 	elem, err = r.Append(byte('3'), elem.ID)
 	ne(err)
 
 	//rga should contain '123'
-	as(r.getString() == "123")
+	as(r.GetString() == "123")
 
 	//single remove
 	_, err = r.Remove(elem.ID)
 
 	ne(err)
 
-	as(r.getString() == "12")
+	as(r.GetString() == "12")
 
 	//double deleting the same element
 	_, err = r.Remove(elem.ID)
 	ne(err)
 
-	as(r.getString() == "12")
+	as(r.GetString() == "12")
 }
 
 func UpdateAllOtherPeer(peer int, rgaList []*RGA, elem Elem) error {
@@ -116,7 +117,7 @@ func AppendStringAndUpdate(text string, after Id, r *RGA, rList []*RGA) ([]Elem,
 
 func AllPeerViewTest(t *testing.T, rList []*RGA, expect string) {
 	for _, r := range rList {
-		as(r.getString() == expect)
+		as(r.GetString() == expect)
 	}
 }
 
