@@ -1,29 +1,8 @@
 package crdt
 
 import (
-	"log"
-	"runtime/debug"
 	"testing"
 )
-
-func ne(e error) {
-	if e != nil {
-		debug.PrintStack()
-		log.Fatal(e)
-	}
-}
-func er(e error) {
-	if e == nil {
-		debug.PrintStack()
-		log.Fatal("didn't get an error, when it should")
-	}
-}
-func as(cond bool) {
-	if !cond {
-		debug.PrintStack()
-		log.Fatal("assertion failed")
-	}
-}
 
 func TestSingleUser(t *testing.T) {
 	// creating new rga
@@ -136,13 +115,21 @@ func TestTwoUser(t *testing.T) {
 	///////////////// Append View test
 
 	//peer 0 type A and expect peer 1 to see A
+<<<<<<< HEAD
 	elem, err := AppendAndUpate(byte('A'), r[1].Head.Elem.ID, r[0], r)
+=======
+	_, err := AppendAndUpate(byte('A'), r[0].Head.Elem.ID, r[0], r)
+>>>>>>> 66ec123d8737f4c045432d299a3639de5d4a62e0
 	ne(err)
 	AllPeerViewTest(t, r, "A")
 
 	//peer 1 type B and expect peer 0 to see AB
 	//(because on how we sort message prority when before if the same)
+<<<<<<< HEAD
 	_, err = AppendAndUpate(byte('B'), r[0].Head.Elem.ID, r[1], r)
+=======
+	elem, err := AppendAndUpate(byte('B'), r[1].Head.Elem.ID, r[1], r)
+>>>>>>> 66ec123d8737f4c045432d299a3639de5d4a62e0
 	ne(err)
 	//log.Println(r[0].getString())
 	AllPeerViewTest(t, r, "BA")
@@ -150,14 +137,23 @@ func TestTwoUser(t *testing.T) {
 	//peer 0 types HelloWorld after A, should see
 	_, err = AppendStringAndUpdate("HelloWorld", elem.ID, r[0], r)
 	ne(err)
+<<<<<<< HEAD
 	//log.Println(r[0].getString())
 	AllPeerViewTest(t, r, "BAHelloWorld")
+=======
+	// log.Println(r[0].GetString())
+	AllPeerViewTest(t, r, "BHelloWorldA")
+>>>>>>> 66ec123d8737f4c045432d299a3639de5d4a62e0
 
 	//////////////// Delete View test
 
 	//peer 1 trys to remove the 'A' peer 0 typed
 	err = RemoveAndUpdate(elem.ID, r[1], r)
 	ne(err)
+<<<<<<< HEAD
 	AllPeerViewTest(t, r, "BHelloWorld")
+=======
+	AllPeerViewTest(t, r, "HelloWorldA")
+>>>>>>> 66ec123d8737f4c045432d299a3639de5d4a62e0
 
 }

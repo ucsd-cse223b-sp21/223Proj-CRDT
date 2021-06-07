@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"proj/crdt"
 
@@ -28,34 +29,83 @@ const BACKUP_SIZE = 1000
 type Peer struct {
 	peer      int
 	addrs     []string
-	conns     map[*websocket.Conn]bool
+	conns     map[int]*websocket.Conn
 	upgrader  websocket.Upgrader
 	Rga       *crdt.RGA
 	broadcast chan crdt.Elem
 	backup    chan crdt.Elem
 	gc        chan<- crdt.VecClock
 	dc        bool
+	connect   chan websocket.Conn
 }
 
 func MakePeer(c Config) *Peer {
 	broadcast := make(chan crdt.Elem)
 	rga := crdt.NewRGAOverNetwork(c.Peer, len(c.Addrs), broadcast)
 	peer := Peer{
-		peer:      c.Peer,
-		addrs:     c.Addrs,
-		upgrader:  websocket.Upgrader{},
-		conns:     make(map[*websocket.Conn]bool),
+		peer:     c.Peer,
+		addrs:    c.Addrs,
+		upgrader: websocket.Upgrader{},
+		conns:    make(map[int]*websocket.Conn),
+		// copyingTo: make(map[int]bool),
+		// holding: make(chan []byte, 5),
 		broadcast: broadcast,
 		backup:    make(chan crdt.Elem, BACKUP_SIZE),
 		Rga:       rga,
 		gc:        crdt.StartGC(rga),
-		dc:        false,
+		dc:        true,
+		connect:   make(chan websocket.Conn),
 	}
 
 	return &peer
 }
 
-func (peer *Peer) InitPeer() {
+func (peer *Peer) initializeFromPeer(conn *websocket.Conn) error {
+	first := []byte(strconv.Itoa(peer.peer))
+	sendRGA := 0
+	if peer.dc {
+		sendRGA = 1
+	}
+	first = append(first, byte(sendRGA))
+	err := conn.WriteMessage(websocket.BinaryMessage, first)
+	if err != nil {
+		return err
+	}
+
+	if peer.dc {
+		_, buf, err := conn.ReadMessage()
+		if err != nil {
+			return err
+		}
+		peer.Rga.MergeFromEncoding(buf)
+	}
+
+	return nil
+}
+
+func (peer *Peer) initializeOtherPeer(conn *websocket.Conn) (int, error) {
+	_, buf, err := conn.ReadMessage()
+	if err != nil {
+		return 0, err
+	}
+
+	sendRga := int(buf[len(buf)-1])
+
+	// send RGA string
+	if sendRga == 1 {
+		conn.WriteMessage(websocket.BinaryMessage, []byte(peer.Rga.GetEncoding()))
+	}
+
+	peerString := string(buf[:len(buf)-1])
+	i, err := strconv.Atoi(peerString)
+	if err != nil {
+		return 0, err
+	}
+
+	return i, nil
+}
+
+func (peer *Peer) connectToPeers() {
 	// proactively attempt starting connections on creation
 	// if peer goes down and back up, it will attempt to reconnect here
 	// (need seperate logic for network partition if we care -- ie: disconnected but not restarted)
@@ -73,10 +123,24 @@ func (peer *Peer) InitPeer() {
 		}
 
 		// create connection and goroutine for reading from it
-		peer.conns[c] = true
-		go peer.readPeer(c)
+		if peer.conns[i] == nil {
+			err = peer.initializeFromPeer(c)
+			if err != nil {
+				log.Printf("initializeFromPeer failed")
+				continue
+			}
+			peer.dc = false
+			peer.conns[i] = c
+			go peer.readPeer(c, i)
+		} else {
+			c.Close()
+		}
 	}
+}
 
+func (peer *Peer) InitPeer() {
+	go peer.serve()
+	peer.connectToPeers()
 	go peer.writeProc()
 }
 
@@ -91,13 +155,23 @@ func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 
 		// create connection and goroutine for reading from it
 		// TODO: determine if need to create go-routine here or not (think we should)
-		p.conns[c] = true
-		go p.readPeer(c)
+		i, err := p.initializeOtherPeer(c)
+		if err != nil {
+			log.Printf("initializeFromPeer failed")
+			return
+		}
+
+		if p.conns[i] == nil {
+			p.conns[i] = c
+			go p.readPeer(c, i)
+		} else {
+			c.Close()
+		}
 	}
 }
 
 // reads messages from peer in loop until connection fails
-func (p *Peer) readPeer(c *websocket.Conn) error {
+func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 	for {
 		mT, buf, err := c.ReadMessage()
 		log.Printf("Message type: %d", mT)
@@ -105,7 +179,7 @@ func (p *Peer) readPeer(c *websocket.Conn) error {
 
 		// TODO: make sure error means disconnection
 		if err != nil {
-			delete(p.conns, c)
+			delete(p.conns, ind)
 			return errors.New("connection is down")
 		}
 
@@ -135,23 +209,45 @@ func (p *Peer) readPeer(c *websocket.Conn) error {
 }
 
 // have peer start acting as server (can receive websocket connections)
-func (p *Peer) Serve() {
+func (p *Peer) serve() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", p.makeHandler())
 	http.ListenAndServe(p.addrs[p.peer], mux)
 }
+
+func (p *Peer) Disconnect() {
+	p.conns = make(map[int]*websocket.Conn)
+	p.dc = true
+}
+
+// start peer from
+func (p *Peer) Connect() {
+	p.connectToPeers()
+}
+
+// // start peer from
+// func (p *Peer) managePeer() {
+// 	for {
+// 		c := <-p.connect
+// 		p.initializeFromPeer(c)
+// 	}
+// }
 
 // process for writing(broadcasting) elem's to all peers
 // potentially consider parallelizing the writes to different peers?
 func (p *Peer) writeProc() {
 	for {
 		e := <-p.broadcast
+		// if p.dc || len(p.conns) == 0 {
+		// p.dc = true
 		if p.dc {
 			p.backup <- e
 			continue
 		} else if len(p.backup) > 0 {
 			for len(p.backup) > 0 {
-				p.Broadcast(<-p.backup)
+				b := <-p.backup
+				p.Rga.Update(b)
+				p.Broadcast(b)
 			}
 		}
 
@@ -165,11 +261,31 @@ func (p *Peer) Broadcast(e crdt.Elem) {
 	enc := gob.NewEncoder(buf)
 	enc.Encode(msg)
 	by := buf.Bytes()
-	for conn := range p.conns {
-		e := conn.WriteMessage(websocket.TextMessage, by)
+
+	// // for messages send after Rga copy sent to new peer i but before the p.conns[i] is set
+	// for k := range p.copyingTo {
+	// 	p.holding[k] <- by
+	// }
+	for k := range p.conns {
+		// // p.conns[i] has been set
+		// if p.copyingTo[k] {
+		// 	delete(p.copyingTo, k)
+		// 	for len(p.holding) > 0 {
+		// 		b := <-p.holding[k]
+		// 		e := p.conns[k].WriteMessage(websocket.TextMessage, b)
+		// 		if e != nil {
+		// 			delete(p.conns, k)
+		// 			// clear them
+		// 			p.copyingTo =
+		// 			p.holding =
+		// 		}
+		// 	}
+		// }
+
+		e := p.conns[k].WriteMessage(websocket.TextMessage, by)
 		// TODO make sure error always implies delete
 		if e != nil {
-			delete(p.conns, conn)
+			delete(p.conns, k)
 		}
 	}
 }
