@@ -1,8 +1,7 @@
-package document
+package crdt
 
 import (
 	"errors"
-	"proj/crdt"
 )
 
 type Document interface {
@@ -11,20 +10,22 @@ type Document interface {
 	Append(after int, val byte) error
 
 	Remove(at int) error
+
+	UpdateView()
 }
 
 var _ Document = new(RgaDoc)
 
-func newRgaDoc(rga crdt.RGA) *RgaDoc {
+func newRgaDoc(rga RGA) Document {
 	return &RgaDoc{
 		content: "",
-		idList:  make([]crdt.Id, 0),
+		idList:  make([]Id, 0),
 		r:       rga,
 	}
 }
 
-func NewRgaDoc(r *crdt.RGA) *RgaDoc {
-	idList := make([]crdt.Id, 1)
+func NewRgaDoc(r *RGA) Document {
+	idList := make([]Id, 1)
 	idList[0] = r.Head.Elem.ID
 
 	doc := RgaDoc{"", idList, *r}
@@ -33,8 +34,8 @@ func NewRgaDoc(r *crdt.RGA) *RgaDoc {
 
 type RgaDoc struct {
 	content string
-	idList  []crdt.Id
-	r       crdt.RGA
+	idList  []Id
+	r       RGA
 }
 
 func (d *RgaDoc) View() string {
@@ -46,9 +47,9 @@ func (d *RgaDoc) Append(after int, val byte) error {
 		return errors.New("after out of range")
 	}
 
-	var afterId crdt.Id
+	var afterId Id
 	if after == 0 {
-		afterId = crdt.Id{}
+		afterId = Id{}
 	} else {
 		afterId = d.idList[after]
 	}
@@ -92,7 +93,6 @@ func (d *RgaDoc) Remove(at int) error {
 	return nil
 }
 
-func (d *RgaDoc) UpdateView() error {
+func (d *RgaDoc) UpdateView() {
 	d.content, d.idList = d.r.GetView()
-	return nil
 }

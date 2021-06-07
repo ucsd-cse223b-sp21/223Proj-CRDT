@@ -1,6 +1,8 @@
 package crdt
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
 	"log"
 	"sync"
@@ -26,8 +28,13 @@ type Id struct {
 	Seq   uint64
 }
 
+type EncodedRGA struct {
+	List []Elem
+}
+
 type RGA struct {
 	Peer     int
+	Doc      Document
 	numPeers int
 	time     uint64
 	seq      uint64
@@ -38,6 +45,45 @@ type RGA struct {
 	// remQ      []*Node   // TODO : make gc more efficient with array of arrows indexed by seq
 	vecC      VecClock
 	broadcast chan<- Elem
+}
+
+func (r *RGA) GetEncoding() []byte {
+	enc := EncodedRGA{
+		List: make([]Elem, 0),
+	}
+
+	curr := &r.Head
+	for curr != nil {
+		//if element is not deleted, append character
+		if (curr.Elem.Rem == Id{}) {
+			enc.List = append(enc.List, curr.Elem)
+		}
+		curr = curr.next
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+	err := gob.NewEncoder(buf).Encode(enc)
+	if err != nil {
+		log.Fatal("Encode failure in GetEncoding")
+	}
+	return buf.Bytes()
+}
+
+func (r *RGA) MergeFromEncoding(encBytes []byte) error {
+	var enc EncodedRGA
+	err := gob.NewDecoder(bytes.NewBuffer(encBytes)).Decode(&enc)
+	if err != nil {
+		return err
+	}
+
+	for _, enc := range enc.List {
+		err = r.Update(enc)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *RGA) clock(atLeast uint64) {
@@ -110,6 +156,7 @@ func NewRGA(peer int, numPeers int) *RGA {
 		remQ: make([][]*Node, numPeers),
 		vecC: NewVecClock(peer, numPeers),
 	}
+	r.Doc = NewRgaDoc(&r)
 
 	r.Head.Elem = Elem{ID: Id{0, 0, 0}, After: Id{}, Rem: Id{}, Val: 0}
 	r.m[r.Head.Elem.ID] = &r.Head
@@ -238,6 +285,10 @@ func (r *RGA) Update(e Elem) error {
 		// update clock/vc for new remove
 		r.clock(e.Rem.Time)
 		r.vecC.incrementTo(e.Rem.Peer_, e.Rem.Seq)
+
+		if e.Rem.Peer_ != r.Peer {
+			r.Doc.UpdateView()
+		}
 		return nil
 	}
 
@@ -266,5 +317,9 @@ func (r *RGA) Update(e Elem) error {
 	}
 	prev.next = node
 	r.m[e.ID] = node
+
+	if e.ID.Peer_ != r.Peer {
+		r.Doc.UpdateView()
+	}
 	return nil
 }
