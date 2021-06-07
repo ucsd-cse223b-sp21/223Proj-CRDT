@@ -1,7 +1,5 @@
 package crdt
 
-import "log"
-
 type VecClock struct {
 	Peer int
 	Vc   []uint64
@@ -13,8 +11,6 @@ func NewVecClock(peer int, num int) VecClock {
 }
 
 func (v *VecClock) min(b VecClock) VecClock {
-	log.Print("v :", v.Vc)
-	log.Print("b :", b.Vc)
 	c := *v
 	for i := range b.Vc {
 		if b.Vc[i] < c.Vc[i] {

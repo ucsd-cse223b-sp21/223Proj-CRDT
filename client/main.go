@@ -91,6 +91,10 @@ func runCmd(p *network.Peer, args []string) bool {
 		fmt.Println("=== | VIEW  | ===")
 		fmt.Print(d.View())
 		fmt.Println("=== | END  | ===")
+	case "connect":
+		p.Connect()
+	case "disconnect":
+		p.Disconnect()
 	default:
 		logError(fmt.Errorf("bad command, try \"help\"."))
 	}
