@@ -146,7 +146,7 @@ func TestRgaDoc(t *testing.T) {
 func typeThis(doc *RgaDoc, cursor int, text string) {
 	for _, cha := range text {
 		err := doc.Append(cursor, byte(cha))
-		cursor++
+		//cursor++
 		ne(err)
 	}
 }
