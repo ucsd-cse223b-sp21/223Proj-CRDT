@@ -96,3 +96,35 @@ func TestFaultTolerance(t *testing.T) {
 		as(peer_list[i].Rga.Contains(elem))
 	}
 }
+
+func TestShortestLocalTime(t *testing.T) {
+	addrs := []string{"localhost:3000", "localhost:3001", "localhost:3002", "localhost:3003", "localhost:3004",
+		"localhost:3005", "localhost:3006", "localhost:3007", "localhost:3008", "localhost:3009", "localhost:3010"}
+
+	config := Config{
+		Peer:  0,
+		Addrs: addrs,
+	}
+
+	log.Println("in")
+
+	peer_list := make([]*Peer, len(addrs))
+	for i := 0; i < len(addrs); i++ {
+		config.Peer = i
+		peer_list[i] = MakePeer(config)
+		//go peer_list[i].Serve()
+		peer_list[i].InitPeer()
+	}
+
+	for j := 500; j > 0; j = j - 10 {
+		log.Println("time = ", j, "ms")
+		elem, err := peer_list[0].Rga.Append('1', crdt.Id{})
+		ne(err)
+		time.Sleep(time.Duration(j) * time.Millisecond)
+
+		for i := 1; i < len(addrs); i++ {
+			log.Println(peer_list[i].Rga.GetView())
+			as(peer_list[i].Rga.Contains(elem))
+		}
+	}
+}
