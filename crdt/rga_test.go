@@ -27,7 +27,7 @@ func as(cond bool) {
 
 func TestSingleUser(t *testing.T) {
 	// creating new rga
-	r := NewRGA(1, 1)
+	r := NewRGA(0, 1)
 
 	//as(r.Length() == 0)
 
