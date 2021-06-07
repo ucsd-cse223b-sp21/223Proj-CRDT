@@ -54,12 +54,12 @@ func (r *RGA) GetEncoding() []byte {
 
 	curr := &r.Head
 	for curr != nil {
-		//if element is not deleted, append character
-		if (curr.Elem.Rem == Id{}) {
-			enc.List = append(enc.List, curr.Elem)
-		}
+		enc.List = append(enc.List, curr.Elem)
 		curr = curr.next
 	}
+
+	// log.Printf("Peer %d Encoding Has: %v", r.Peer, enc.List)
+	// log.Print ln(r.GetView())
 
 	buf := bytes.NewBuffer([]byte{})
 	err := gob.NewEncoder(buf).Encode(enc)
@@ -76,6 +76,9 @@ func (r *RGA) MergeFromEncoding(encBytes []byte) error {
 		return err
 	}
 
+	log.Printf("Decoding Has: %v", enc.List)
+	log.Printf("Peer %d Already Has: |%v|", r.Peer, r.GetString())
+
 	for _, enc := range enc.List {
 		err = r.Update(enc)
 		if err != nil {
@@ -83,6 +86,7 @@ func (r *RGA) MergeFromEncoding(encBytes []byte) error {
 		}
 	}
 
+	log.Printf("Peer %d NOW Has: |%v|", r.Peer, r.GetString())
 	return nil
 }
 
@@ -114,7 +118,7 @@ func (r *RGA) GetView() (string, []Id) {
 		}
 		curr = curr.next
 	}
-	return string(b[1:]), i[1:]
+	return string(b[1:]), i
 }
 
 func (r *RGA) GetString() string {
@@ -140,7 +144,10 @@ func newRGAList(numPeers int) []*RGA {
 }
 
 func (r *RGA) Contains(e Elem) bool {
-	if n, ok := r.m[e.ID]; ok && n.Elem.Rem == e.Rem {
+	r.mut.Lock()
+	n, ok := r.m[e.ID]
+	r.mut.Unlock()
+	if ok && n.Elem.Rem == e.Rem {
 		return true
 	}
 	return false
@@ -276,9 +283,18 @@ func sortedInsert(list []*Node, node *Node) []*Node {
 
 // merge in any elem into RGA (used by local append and any downstream ops)
 func (r *RGA) Update(e Elem) error {
+	// log.Printf("Update on peer %d with elem num %d from peer %d with byte %v", r.Peer, e.ID.Time, e.ID.Peer_, e.Val)
 
 	// node already exists and its being removed (modify node ala tombstone)
-	if n, ok := r.m[e.ID]; ok && e.Rem.Time != 0 {
+	r.mut.Lock()
+	n, ok := r.m[e.ID]
+	r.mut.Unlock()
+	if ok {
+		// redundant operation
+		if e.Rem.Time == 0 {
+			return nil
+		}
+
 		n.Elem = e
 		// r.remQ = append(r.remQ, n)
 		r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
@@ -304,6 +320,15 @@ func (r *RGA) Update(e Elem) error {
 	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
 
 	// find insert location
+	// DO atomically to avoid data races
+	r.mut.Lock()
+	// ignore existing node to avoid inconsistency on redundent operations
+	_, ok = r.m[e.ID]
+	if ok {
+		r.mut.Unlock()
+		return nil
+	}
+
 	prev := after
 	next := prev.next
 	for next != nil && next.Elem.After == next.prev.Elem.ID && next.Elem.isNewerThan(e) {
@@ -317,6 +342,7 @@ func (r *RGA) Update(e Elem) error {
 	}
 	prev.next = node
 	r.m[e.ID] = node
+	r.mut.Unlock()
 
 	if e.ID.Peer_ != r.Peer {
 		r.Doc.UpdateView()

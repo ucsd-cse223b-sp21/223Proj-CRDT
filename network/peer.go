@@ -121,6 +121,7 @@ func (peer *Peer) connectToPeers() {
 			log.Printf("connection on join to peer %d failed : %s", i, err)
 			continue
 		}
+		log.Printf("connection on join to peer %d succeeded!", i)
 
 		// create connection and goroutine for reading from it
 		if peer.conns[i] == nil {
@@ -129,6 +130,7 @@ func (peer *Peer) connectToPeers() {
 				log.Printf("initializeFromPeer failed")
 				continue
 			}
+			log.Printf("Conn set for Old Peer %d on Peer %d", i, peer.peer)
 			peer.dc = false
 			peer.conns[i] = c
 			go peer.readPeer(c, i)
@@ -136,6 +138,8 @@ func (peer *Peer) connectToPeers() {
 			c.Close()
 		}
 	}
+
+	peer.dc = false
 }
 
 func (peer *Peer) InitPeer() {
@@ -157,12 +161,13 @@ func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 		// TODO: determine if need to create go-routine here or not (think we should)
 		i, err := p.initializeOtherPeer(c)
 		if err != nil {
-			log.Printf("initializeFromPeer failed")
+			log.Printf("initializeOtherPeer failed")
 			return
 		}
 
 		if p.conns[i] == nil {
 			p.conns[i] = c
+			log.Printf("Conn set for New Peer %d on Peer %d", i, p.peer)
 			go p.readPeer(c, i)
 		} else {
 			c.Close()
@@ -172,10 +177,11 @@ func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 
 // reads messages from peer in loop until connection fails
 func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
+	log.Printf("Reading on Peer %d from Peer %d", p.peer, ind)
 	for {
-		mT, buf, err := c.ReadMessage()
-		log.Printf("Message type: %d", mT)
-		log.Printf("Read message on Peer %d", p.peer)
+		_, buf, err := c.ReadMessage()
+		// log.Printf("Message type: %d", mT)
+		// log.Printf("Read message on Peer %d", p.peer)
 
 		// TODO: make sure error means disconnection
 		if err != nil {
@@ -183,7 +189,7 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 			return errors.New("connection is down")
 		}
 
-		log.Println("Read messsage successfully ")
+		// log.Println("Read messsage successfully ")
 
 		dec := gob.NewDecoder(bytes.NewBuffer(buf))
 		var msg Message
@@ -195,7 +201,7 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 			return errors.New("decode of peer's message failed")
 		}
 
-		log.Println(msg)
+		// log.Println(msg)
 		elem := msg.E
 		vc := msg.Vc
 		p.gc <- vc
@@ -216,6 +222,9 @@ func (p *Peer) serve() {
 }
 
 func (p *Peer) Disconnect() {
+	for c := range p.conns {
+		p.conns[c].Close()
+	}
 	p.conns = make(map[int]*websocket.Conn)
 	p.dc = true
 }
@@ -223,6 +232,7 @@ func (p *Peer) Disconnect() {
 // start peer from
 func (p *Peer) Connect() {
 	p.connectToPeers()
+	p.broadcast <- crdt.Elem{}
 }
 
 // // start peer from
@@ -238,6 +248,9 @@ func (p *Peer) Connect() {
 func (p *Peer) writeProc() {
 	for {
 		e := <-p.broadcast
+		log.Printf("Writing element from Peer %d", p.peer)
+		log.Printf("p.dc: %t", p.dc)
+		log.Printf("len(p.backup): %d", len(p.backup))
 		// if p.dc || len(p.conns) == 0 {
 		// p.dc = true
 		if p.dc {
@@ -251,11 +264,14 @@ func (p *Peer) writeProc() {
 			}
 		}
 
+		if e.ID.Time != 0 {
 		p.Broadcast(e)
+		}
 	}
 }
 
 func (p *Peer) Broadcast(e crdt.Elem) {
+	log.Printf("Broadcasting element from Peer %d", p.peer)
 	msg := Message{E: e, Vc: p.Rga.VectorClock()}
 	buf := bytes.NewBuffer([]byte{})
 	enc := gob.NewEncoder(buf)
