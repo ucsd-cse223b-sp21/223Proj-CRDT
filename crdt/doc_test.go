@@ -1,11 +1,8 @@
-package document
+package crdt
 
 import (
-	"fmt"
 	"log"
 	"math"
-	"proj/crdt"
-	"proj/network"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -85,8 +82,8 @@ func TestRgaDoc(t *testing.T) {
 	log.Println("testing document")
 
 	// create doc
-	r := crdt.NewRGA(0, 1)
-	doc := *NewRgaDoc(r)
+	r := NewRGA(0, 1)
+	doc := NewRgaDoc(r)
 
 	as(doc.View() == "")
 
@@ -108,43 +105,43 @@ func TestRgaDoc(t *testing.T) {
 
 }
 
-func TestPeer2(t *testing.T) {
-	// getting 10 peers
-	addrs := []string{}
-	for i := 0; i < 10; i++ {
-		addrs = append(addrs, fmt.Sprintf("localhost:310%d", i))
-	}
+// func TestPeer2(t *testing.T) {
+// 	// getting 10 peers
+// 	addrs := []string{}
+// 	for i := 0; i < 10; i++ {
+// 		addrs = append(addrs, fmt.Sprintf("localhost:310%d", i))
+// 	}
 
-	config := network.Config{
-		Peer:  0,
-		Addrs: addrs,
-	}
+// 	config := network.Config{
+// 		Peer:  0,
+// 		Addrs: addrs,
+// 	}
 
-	Peer := make([]*network.Peer, 10)
-	doc := make([]*RgaDoc, 10)
+// 	Peer := make([]*network.Peer, 10)
+// 	doc := make([]*RgaDoc, 10)
 
-	for i := 0; i < 10; i++ {
-		config.Peer = i
-		Peer[i] = network.MakePeer(config)
-		go Peer[i].Serve()
-		Peer[i].InitPeer()
-		doc[i] = NewRgaDoc(Peer[i].Rga)
-	}
+// 	for i := 0; i < 10; i++ {
+// 		config.Peer = i
+// 		Peer[i] = network.MakePeer(config)
+// 		go Peer[i].Serve()
+// 		Peer[i].InitPeer()
+// 		doc[i] = NewRgaDoc(Peer[i].Rga)
+// 	}
 
-	typeThis(doc[0], 0, "HELLOWORLD!")
-	typeThis(doc[1], 0, "helloWorld!")
+// 	typeThis(doc[0], 0, "HELLOWORLD!")
+// 	typeThis(doc[1], 0, "helloWorld!")
 
-	time.Sleep(ViewProTime)
-	doc[0].UpdateView()
-	doc[1].UpdateView()
+// 	time.Sleep(ViewProTime)
+// 	doc[0].UpdateView()
+// 	doc[1].UpdateView()
 
-	log.Println(doc[0].View())
-	log.Println(doc[1].View())
-	time.Sleep(ViewProTime)
-	as(doc[0].View() != "")
-	as(doc[1].View() != "")
-	as(doc[0].View() == doc[1].View())
-}
+// 	log.Println(doc[0].View())
+// 	log.Println(doc[1].View())
+// 	time.Sleep(ViewProTime)
+// 	as(doc[0].View() != "")
+// 	as(doc[1].View() != "")
+// 	as(doc[0].View() == doc[1].View())
+// }
 
 func typeThis(doc *RgaDoc, cursor int, text string) {
 	for _, cha := range text {
@@ -154,38 +151,38 @@ func typeThis(doc *RgaDoc, cursor int, text string) {
 	}
 }
 
-func TestDocDisconnect(t *testing.T) {
-	// getting 10 peers
-	addrs := []string{}
-	for i := 0; i < 10; i++ {
-		addrs = append(addrs, fmt.Sprintf("localhost:320%d", i))
-	}
+// func TestDocDisconnect(t *testing.T) {
+// 	// getting 10 peers
+// 	addrs := []string{}
+// 	for i := 0; i < 10; i++ {
+// 		addrs = append(addrs, fmt.Sprintf("localhost:320%d", i))
+// 	}
 
-	config := network.Config{
-		Peer:  0,
-		Addrs: addrs,
-	}
+// 	config := network.Config{
+// 		Peer:  0,
+// 		Addrs: addrs,
+// 	}
 
-	Peer := make([]*network.Peer, 10)
-	doc := make([]*RgaDoc, 10)
+// 	Peer := make([]*network.Peer, 10)
+// 	doc := make([]*RgaDoc, 10)
 
-	for i := 0; i < 10; i++ {
-		config.Peer = i
-		Peer[i] = network.MakePeer(config)
-		go Peer[i].Serve()
-		Peer[i].InitPeer()
-		doc[i] = NewRgaDoc(Peer[i].Rga)
-	}
+// 	for i := 0; i < 10; i++ {
+// 		config.Peer = i
+// 		Peer[i] = network.MakePeer(config)
+// 		go Peer[i].Serve()
+// 		Peer[i].InitPeer()
+// 		doc[i] = NewRgaDoc(Peer[i].Rga)
+// 	}
 
-	typeThis(doc[0], 0, "base")
-	typeThis(doc[1], 0, "Before_disconnect_")
+// 	typeThis(doc[0], 0, "base")
+// 	typeThis(doc[1], 0, "Before_disconnect_")
 
-	//Peer[1].Dc = true
-	typeThis(doc[1], 0, "After_disconnect_")
-	AllDocUpdateView(doc, true)
-	log.Println("doc[1] sees", doc[1].View())
-	as(doc[1].View() == "After_disconnect_Before_disconnect_base")
-}
+// 	//Peer[1].Dc = true
+// 	typeThis(doc[1], 0, "After_disconnect_")
+// 	AllDocUpdateView(doc, true)
+// 	log.Println("doc[1] sees", doc[1].View())
+// 	as(doc[1].View() == "After_disconnect_Before_disconnect_base")
+// }
 
 func AllDocUpdateView(docList []*RgaDoc, wait bool) {
 	if wait {

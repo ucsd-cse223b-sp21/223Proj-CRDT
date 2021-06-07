@@ -41,7 +41,7 @@ func TestReadPeers(t *testing.T) {
 	for i := 0; i < len(addrs); i++ {
 		config.Peer = i
 		peer_list[i] = MakePeer(config)
-		go peer_list[i].Serve()
+		// go peer_list[i].Serve()
 		peer_list[i].InitPeer()
 	}
 
@@ -78,7 +78,7 @@ func TestFaultTolerance(t *testing.T) {
 	for i := 0; i < len(addrs); i++ {
 		config.Peer = i
 		peer_list[i] = MakePeer(config)
-		go peer_list[i].Serve()
+		// go peer_list[i].Serve()
 		peer_list[i].InitPeer()
 	}
 
