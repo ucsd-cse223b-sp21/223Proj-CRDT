@@ -2,6 +2,7 @@ package crdt
 
 import (
 	"errors"
+	"log"
 )
 
 type Document interface {
@@ -16,26 +17,18 @@ type Document interface {
 
 var _ Document = new(RgaDoc)
 
-func newRgaDoc(rga RGA) Document {
-	return &RgaDoc{
-		content: "",
-		idList:  make([]Id, 0),
-		r:       rga,
-	}
-}
-
 func NewRgaDoc(r *RGA) Document {
 	idList := make([]Id, 1)
 	idList[0] = r.Head.Elem.ID
 
-	doc := RgaDoc{"", idList, *r}
+	doc := RgaDoc{"", idList, r}
 	return &doc
 }
 
 type RgaDoc struct {
 	content string
 	idList  []Id
-	r       RGA
+	r       *RGA
 }
 
 func (d *RgaDoc) View() string {
@@ -54,24 +47,28 @@ func (d *RgaDoc) Append(after int, val byte) error {
 		afterId = d.idList[after]
 	}
 
+	log.Println("before rga append call")
+
 	elem, err := d.r.Append(val, afterId)
 	if err != nil {
 		return err
 	}
 
-	if after == (len(d.content) - 1) {
+	log.Println("after rga append call")
+
+	if after == len(d.content) {
 		d.content = d.content[:after] + string(val)
-		d.idList = append(d.idList[:after], elem.ID)
+		d.idList = append(d.idList, elem.ID)
 	} else {
 		d.content = d.content[:after] + string(val) + d.content[after:]
-		d.idList = append(append(d.idList[:after], elem.ID), d.idList[after:]...)
+		d.idList = append(append(d.idList[:after+1], elem.ID), d.idList[after+1:]...)
 	}
 
 	return nil
 }
 
 func (d *RgaDoc) Remove(at int) error {
-	if at < 0 || at > len(d.idList) {
+	if at < 0 || at > len(d.content) {
 		return errors.New("after out of range")
 	}
 

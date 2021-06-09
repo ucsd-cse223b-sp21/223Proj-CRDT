@@ -1,11 +1,11 @@
-package client
+package main
 
 import (
 	"bufio"
 	"flag"
 	"fmt"
+	"log"
 	"os"
-	"proj/crdt"
 	"proj/network"
 	"strconv"
 	"strings"
@@ -35,7 +35,9 @@ func main() {
 	}
 
 	p := network.MakePeer(config)
+	log.Printf("rga pointer in cmd is %p", p.Rga)
 	p.InitPeer()
+	log.Printf("rga pointer in cmd is %p", p.Rga)
 
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -75,22 +77,24 @@ func logError(e error) {
 func runCmd(p *network.Peer, args []string) bool {
 	cmd := args[0]
 
-	var d crdt.Document
-	d = p.Rga.Doc
+	log.Printf("rga pointer in cmd is %p", p.Rga)
+	p.Rga.B()
 
 	switch cmd {
 	case "append":
 		i, err := strconv.Atoi(args[1])
 		logError(err)
-		logError(d.Append(i, args[2][0]))
+		logError(p.Rga.Doc.Append(i, args[2][0]))
 	case "remove":
 		i, err := strconv.Atoi(args[1])
 		logError(err)
-		logError(d.Remove(i))
+		logError(p.Rga.Doc.Remove(i))
 	case "view":
 		fmt.Println("=== | VIEW  | ===")
-		fmt.Print(d.View())
+		fmt.Println(p.Rga.Doc.View())
 		fmt.Println("=== | END  | ===")
+	case "update":
+		p.Rga.Doc.UpdateView()
 	case "connect":
 		p.Connect()
 	case "disconnect":

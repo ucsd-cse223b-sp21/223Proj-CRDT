@@ -151,6 +151,11 @@ func (peer *Peer) InitPeer() {
 // create handler wrapping peer object to read messages from other peer
 func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if p.dc {
+			r.Body.Close()
+			return
+		}
+
 		c, err := p.upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Print("websocket handler failed on upgrade")
@@ -178,6 +183,7 @@ func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
 // reads messages from peer in loop until connection fails
 func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 	log.Printf("Reading on Peer %d from Peer %d", p.peer, ind)
+	p.Rga.B()
 	for {
 		_, buf, err := c.ReadMessage()
 		// log.Printf("Message type: %d", mT)
@@ -247,6 +253,7 @@ func (p *Peer) Connect() {
 // potentially consider parallelizing the writes to different peers?
 func (p *Peer) writeProc() {
 	for {
+		log.Printf("WriteProc running with broadcast at address %p", p.broadcast)
 		e := <-p.broadcast
 		log.Printf("Writing element from Peer %d", p.peer)
 		log.Printf("p.dc: %t", p.dc)
@@ -265,7 +272,7 @@ func (p *Peer) writeProc() {
 		}
 
 		if e.ID.Time != 0 {
-		p.Broadcast(e)
+			p.Broadcast(e)
 		}
 	}
 }

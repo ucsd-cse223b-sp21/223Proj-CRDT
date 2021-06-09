@@ -87,6 +87,7 @@ func (r *RGA) MergeFromEncoding(encBytes []byte) error {
 	}
 
 	log.Printf("Peer %d NOW Has: |%v|", r.Peer, r.GetString())
+	r.Doc.UpdateView()
 	return nil
 }
 
@@ -171,9 +172,15 @@ func NewRGA(peer int, numPeers int) *RGA {
 	return &r
 }
 
+func (r *RGA) B() {
+	log.Printf("Broadcast in RGA is %v, %v", r, r.broadcast)
+}
+
 func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- Elem) *RGA {
 	r := NewRGA(peer, numPeers)
 	r.broadcast = broadcast
+	// log.Printf("Broadcast on addition to RGA is %v", broadcast)
+	// log.Printf("r.broadcast on addition to RGA is %v", r.broadcast)
 	return r
 }
 
@@ -188,8 +195,10 @@ func (r *RGA) Length() int {
 func (r *RGA) Append(val byte, after Id) (Elem, error) {
 	e := Elem{ID: r.getNewChange(), After: after, Rem: Id{}, Val: val}
 
+	log.Printf("Appending to rga with broadcast %v, %v", r, r.broadcast)
 	// broadcast local change
 	if r.broadcast != nil {
+		log.Printf("Writing to broadcast at address %p", r.broadcast)
 		r.broadcast <- e
 	}
 	return e, r.Update(e)
@@ -284,11 +293,13 @@ func sortedInsert(list []*Node, node *Node) []*Node {
 // merge in any elem into RGA (used by local append and any downstream ops)
 func (r *RGA) Update(e Elem) error {
 	// log.Printf("Update on peer %d with elem num %d from peer %d with byte %v", r.Peer, e.ID.Time, e.ID.Peer_, e.Val)
+	log.Println("Update beginning with %s with current view '%s'", e.Val, r.Doc.View())
 
 	// node already exists and its being removed (modify node ala tombstone)
 	r.mut.Lock()
 	n, ok := r.m[e.ID]
 	r.mut.Unlock()
+	log.Println("Update checked if node exists in map")
 	if ok {
 		// redundant operation
 		if e.Rem.Time == 0 {
@@ -319,6 +330,8 @@ func (r *RGA) Update(e Elem) error {
 	log.Println("e.ID.Peer_", e.ID.Peer_)
 	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
 
+	log.Println("Update ready to insert")
+
 	// find insert location
 	// DO atomically to avoid data races
 	r.mut.Lock()
@@ -344,8 +357,11 @@ func (r *RGA) Update(e Elem) error {
 	r.m[e.ID] = node
 	r.mut.Unlock()
 
+	log.Println("Update insert finished")
 	if e.ID.Peer_ != r.Peer {
 		r.Doc.UpdateView()
 	}
+	log.Println("Update finished")
+	r.B()
 	return nil
 }
