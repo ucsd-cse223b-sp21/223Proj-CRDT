@@ -142,14 +142,14 @@ func (peer *Peer) connectToPeers() {
 	peer.dc = false
 }
 
-func (peer *Peer) InitPeer() {
-	go peer.serve()
+func (peer *Peer) InitPeer(handler func(w http.ResponseWriter, r *http.Request)) {
+	go peer.serve(handler)
 	peer.connectToPeers()
 	go peer.writeProc()
 }
 
 // create handler wrapping peer object to read messages from other peer
-func (p *Peer) makeHandler() func(http.ResponseWriter, *http.Request) {
+func (p *Peer) makePeerHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if p.dc {
 			r.Body.Close()
@@ -221,9 +221,12 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 }
 
 // have peer start acting as server (can receive websocket connections)
-func (p *Peer) serve() {
+func (p *Peer) serve(handler func(w http.ResponseWriter, r *http.Request)) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", p.makeHandler())
+	mux.HandleFunc("/ws", p.makePeerHandler())
+	if handler != nil {
+		mux.HandleFunc("/gui", handler)
+	}
 	http.ListenAndServe(p.addrs[p.peer], mux)
 }
 

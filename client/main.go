@@ -5,15 +5,21 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"proj/network"
 	"strconv"
 	"strings"
+	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 var (
 	peer     = flag.Int("peer", 0, "peer ID")
 	numPeers = flag.Int("numPeers", 2, "number of peers (max 8)")
+	gui      = flag.Bool("gui", false, "cli or gui")
+	upgrader = websocket.Upgrader{}
 )
 
 // basic main for starting up a peer using config parsed from an argument
@@ -35,22 +41,51 @@ func main() {
 	}
 
 	p := network.MakePeer(config)
-	log.Printf("rga pointer in cmd is %p", p.Rga)
-	p.InitPeer()
-	log.Printf("rga pointer in cmd is %p", p.Rga)
+	if *gui {
+		single := sync.Mutex{} // force single gui per peer to avoid concurrent writes to the same peer
 
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			c, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				log.Print("websocket handler failed on upgrade")
+				return
+			}
+
+			single.Lock()
+			p.Rga.Doc.AddFront(c)
+			for {
+				_, buf, err := c.ReadMessage()
+				if err != nil {
+					break
+				}
+				args := fields(string(buf))
+				if len(args) > 0 {
+					if runCmd(p, args) {
+						break
+					}
+				}
+			}
+			c.Close()
+			single.Unlock()
+		}
+		p.InitPeer(handler)
+
+		// wait forever
+		var nilC chan bool
+		nilC <- true
+	}
+
+	p.InitPeer(nil)
 	scanner := bufio.NewScanner(os.Stdin)
 
 	// user input
-	for {
+	for scanner.Scan() {
 		fmt.Print("> ")
-		for scanner.Scan() {
-			line := scanner.Text()
-			args := fields(line)
-			if len(args) > 0 {
-				if runCmd(p, args) {
-					break
-				}
+		line := scanner.Text()
+		args := fields(line)
+		if len(args) > 0 {
+			if runCmd(p, args) {
+				break
 			}
 		}
 		fmt.Println()

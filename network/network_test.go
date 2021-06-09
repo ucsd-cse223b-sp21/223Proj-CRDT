@@ -42,7 +42,7 @@ func TestReadPeers(t *testing.T) {
 		config.Peer = i
 		peer_list[i] = MakePeer(config)
 		// go peer_list[i].Serve()
-		peer_list[i].InitPeer()
+		peer_list[i].InitPeer(nil)
 	}
 
 	elem, err := peer_list[0].Rga.Append('9', crdt.Id{})
@@ -89,7 +89,7 @@ func TestFaultTolerance1(t *testing.T) {
 		config.Peer = i
 		peer_list[i] = MakePeer(config)
 		// go peer_list[i].Serve()
-		peer_list[i].InitPeer()
+		peer_list[i].InitPeer(nil)
 	}
 
 	peer_list[0].Disconnect()
@@ -126,7 +126,7 @@ func TestFaultTolerance2(t *testing.T) {
 		config.Peer = i
 		peer_list[i] = MakePeer(config)
 		// go peer_list[i].Serve()
-		peer_list[i].InitPeer()
+		peer_list[i].InitPeer(nil)
 	}
 
 	peer_list[0].Disconnect()

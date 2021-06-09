@@ -3,6 +3,8 @@ package crdt
 import (
 	"errors"
 	"log"
+
+	"github.com/gorilla/websocket"
 )
 
 type Document interface {
@@ -13,6 +15,8 @@ type Document interface {
 	Remove(at int) error
 
 	UpdateView()
+
+	AddFront(*websocket.Conn) // maps are pointer types
 }
 
 var _ Document = new(RgaDoc)
@@ -21,14 +25,19 @@ func NewRgaDoc(r *RGA) Document {
 	idList := make([]Id, 1)
 	idList[0] = r.Head.Elem.ID
 
-	doc := RgaDoc{"", idList, r}
+	doc := RgaDoc{"", idList, r, nil}
 	return &doc
+}
+
+func (d *RgaDoc) AddFront(front *websocket.Conn) {
+	d.front = front
 }
 
 type RgaDoc struct {
 	content string
 	idList  []Id
 	r       *RGA
+	front   *websocket.Conn
 }
 
 func (d *RgaDoc) View() string {
@@ -92,4 +101,7 @@ func (d *RgaDoc) Remove(at int) error {
 
 func (d *RgaDoc) UpdateView() {
 	d.content, d.idList = d.r.GetView()
+	if d.front != nil && d.front.WriteMessage(websocket.TextMessage, []byte(d.content)) != nil {
+		d.front = nil
+	}
 }
