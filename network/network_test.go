@@ -28,7 +28,6 @@ func as(cond bool) {
 }
 
 // -addr=localhost:3000
-
 func TestReadPeers(t *testing.T) {
 	// addrs := []string{"localhost:3000", "localhost:3001"}
 	addrs := []string{"localhost:3000", "localhost:3001", "localhost:3002", "localhost:4000", "localhost:4004", "localhost:4040", "localhost:8000", "localhost:8080", "localhost:8008", "localhost:3050",
@@ -150,6 +149,7 @@ func TestFaultTolerance2(t *testing.T) {
 
 }
 
+/*
 func TestShortestLocalTime(t *testing.T) {
 	addrs := []string{"localhost:3000", "localhost:3001", "localhost:3002", "localhost:3003", "localhost:3004",
 		"localhost:3005", "localhost:3006", "localhost:3007", "localhost:3008", "localhost:3009", "localhost:3010"}
@@ -168,3 +168,4 @@ func TestShortestLocalTime(t *testing.T) {
 	}
 
 }
+*/
