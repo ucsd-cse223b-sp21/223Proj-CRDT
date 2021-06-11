@@ -281,29 +281,6 @@ func (r *RGA) VectorClock() VecClock {
 	return r.vecC
 }
 
-// binary search and insert
-func sortedInsert(list []*Node, node *Node) []*Node {
-	l := len(list)
-	if l == 0 {
-		return append(list, node)
-	}
-
-	low := 0
-	high := len(list) - 1
-	for low < high {
-		median := (low + high) / 2
-		if list[median].Elem.Rem.Seq < node.Elem.Rem.Seq {
-			low = median - 1
-		} else if list[median].Elem.Rem.Seq > node.Elem.Rem.Seq {
-			high = median + 1
-		} else {
-			return list
-		}
-	}
-
-	return append(append(list[:low+1], node), list[low+1:]...)
-}
-
 // merge in any elem into RGA (used by local append and any downstream ops)
 func (r *RGA) Update(e Elem) (bool, error) {
 	// log.Printf("Update on peer %d with elem num %d from peer %d with byte %v", r.Peer, e.ID.Time, e.ID.Peer_, e.Val)
@@ -331,7 +308,11 @@ func (r *RGA) Update(e Elem) (bool, error) {
 
 		n.Elem = e
 		// r.remQ = append(r.remQ, n)
-		r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
+
+		// don't need sorted append because updates will always arrive with increasing sequence numbers
+		// r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
+		r.remQ[e.Rem.Peer_] = append(r.remQ[e.Rem.Peer_], n)
+
 		log.Println("check 1")
 		// update clock/vc for new remove
 		r.clock(e.Rem.Time)
