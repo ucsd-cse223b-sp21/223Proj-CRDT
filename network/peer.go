@@ -2,12 +2,14 @@ package network
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"errors"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"proj/crdt"
 
@@ -26,6 +28,9 @@ type Message struct {
 
 const BACKUP_SIZE = 1000
 
+// set to true if we want to track latency / memory
+var BENCH = false
+
 type Peer struct {
 	peer      int
 	addrs     []string
@@ -37,6 +42,8 @@ type Peer struct {
 	gc        chan<- crdt.VecClock
 	dc        bool
 	connect   chan websocket.Conn
+	Lat       chan<- float64
+	S         *http.Server
 }
 
 func MakePeer(c Config) *Peer {
@@ -143,9 +150,13 @@ func (peer *Peer) connectToPeers() {
 }
 
 func (peer *Peer) InitPeer(handler func(w http.ResponseWriter, r *http.Request)) {
-	go peer.serve(handler)
+	peer.S = peer.serve(handler)
 	peer.connectToPeers()
 	go peer.writeProc()
+}
+
+func (peer *Peer) Shutdown() {
+	peer.S.Shutdown(context.Background())
 }
 
 // create handler wrapping peer object to read messages from other peer
@@ -183,9 +194,9 @@ func (p *Peer) makePeerHandler() func(http.ResponseWriter, *http.Request) {
 // reads messages from peer in loop until connection fails
 func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 	log.Printf("Reading on Peer %d from Peer %d", p.peer, ind)
-	p.Rga.B()
 	for {
 		_, buf, err := c.ReadMessage()
+		start := time.Now()
 		// log.Printf("Message type: %d", mT)
 		// log.Printf("Read message on Peer %d", p.peer)
 
@@ -210,24 +221,42 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 		// log.Println(msg)
 		elem := msg.E
 		vc := msg.Vc
-		p.gc <- vc
+		if p.gc != nil {
+			p.gc <- vc
+		}
+
+		duration := time.Since(start).Seconds()
+		log.Printf("Finished read with time: %f and lat is %v", duration, p.Lat)
 
 		// ignores message if it has already been received
 		if !p.Rga.Contains(elem) {
 			p.broadcast <- elem
 			p.Rga.Update(elem)
+
+			// time latency to complete update
+			if p.Lat != nil {
+				log.Printf("Sending time: %f", duration)
+				p.Lat <- duration
+			}
 		}
 	}
 }
 
+func (p *Peer) Size() int {
+	return len(p.conns)
+}
+
 // have peer start acting as server (can receive websocket connections)
-func (p *Peer) serve(handler func(w http.ResponseWriter, r *http.Request)) {
+func (p *Peer) serve(handler func(w http.ResponseWriter, r *http.Request)) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", p.makePeerHandler())
 	if handler != nil {
 		mux.HandleFunc("/gui", handler)
 	}
-	http.ListenAndServe(p.addrs[p.peer], mux)
+	// go http.ListenAndServe(p.addrs[p.peer], mux)
+	server := &http.Server{Addr: p.addrs[p.peer], Handler: mux}
+	go server.ListenAndServe()
+	return server
 }
 
 func (p *Peer) Disconnect() {

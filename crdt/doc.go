@@ -10,6 +10,8 @@ import (
 type Document interface {
 	View() string
 
+	Length() int
+
 	Append(after int, val byte) error
 
 	Remove(at int) error
@@ -22,10 +24,8 @@ type Document interface {
 var _ Document = new(RgaDoc)
 
 func NewRgaDoc(r *RGA) Document {
-	idList := make([]Id, 1)
-	idList[0] = r.Head.Elem.ID
-
-	doc := RgaDoc{"", idList, r, nil}
+	doc := RgaDoc{r: r}
+	doc.UpdateView()
 	return &doc
 }
 
@@ -41,43 +41,46 @@ type RgaDoc struct {
 }
 
 func (d *RgaDoc) View() string {
-	return d.content
+	return d.content[1:] // ignore head
 }
 
+func (d *RgaDoc) Length() int {
+	return len(d.content) - 1
+}
+
+// after is in range [0,length]
 func (d *RgaDoc) Append(after int, val byte) error {
-	if after < 0 || after >= len(d.idList) {
+	if after < 0 || after >= len(d.content) {
 		return errors.New("after out of range")
 	}
 
-	var afterId Id
-	if after == 0 {
-		afterId = Id{}
-	} else {
-		afterId = d.idList[after]
-	}
+	log.Printf("length of content is %d, length of idList is %d", len(d.content), len(d.idList))
+	afterId := d.idList[after]
 
 	log.Println("before rga append call")
 
-	elem, err := d.r.Append(val, afterId)
+	// elem, err := d.r.Append(val, afterId)
+	_, err := d.r.Append(val, afterId)
 	if err != nil {
 		return err
 	}
 
-	log.Println("after rga append call")
+	// log.Println("after rga append call")
 
-	if after == len(d.content) {
-		d.content = d.content[:after] + string(val)
-		d.idList = append(d.idList, elem.ID)
-	} else {
-		d.content = d.content[:after] + string(val) + d.content[after:]
-		d.idList = append(append(d.idList[:after+1], elem.ID), d.idList[after+1:]...)
-	}
+	// if after == len(d.content)-1 {
+	// 	d.content = d.content + string(val)
+	// 	d.idList = append(d.idList, elem.ID)
+	// } else {
+	// 	d.content = d.content[:after+1] + string(val) + d.content[after+1:]
+	// 	d.idList = append(append(d.idList[:after+1], elem.ID), d.idList[after+1:]...)
+	// }
 
 	return nil
 }
 
+// remove at should be in range (0,length] (exclusive to 0 / head)
 func (d *RgaDoc) Remove(at int) error {
-	if at < 0 || at > len(d.content) {
+	if at <= 0 || at >= len(d.content) {
 		return errors.New("after out of range")
 	}
 
@@ -88,13 +91,13 @@ func (d *RgaDoc) Remove(at int) error {
 		return err
 	}
 
-	if at == (len(d.content) - 1) {
-		d.content = d.content[:at]
-		d.idList = d.idList[:at]
-	} else {
-		d.content = d.content[:at] + d.content[at+1:]
-		d.idList = append(d.idList[:at], d.idList[at+1:]...)
-	}
+	// if at == len(d.content)-1 {
+	// 	d.content = d.content[:at]
+	// 	d.idList = d.idList[:at]
+	// } else {
+	// 	d.content = d.content[:at] + d.content[at+1:]
+	// 	d.idList = append(d.idList[:at], d.idList[at+1:]...)
+	// }
 
 	return nil
 }

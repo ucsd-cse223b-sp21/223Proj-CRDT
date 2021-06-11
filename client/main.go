@@ -113,7 +113,6 @@ func runCmd(p *network.Peer, args []string) bool {
 	cmd := args[0]
 
 	log.Printf("rga pointer in cmd is %p", p.Rga)
-	p.Rga.B()
 
 	switch cmd {
 	case "append":

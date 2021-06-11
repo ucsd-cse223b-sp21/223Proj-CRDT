@@ -119,7 +119,8 @@ func (r *RGA) GetView() (string, []Id) {
 		}
 		curr = curr.next
 	}
-	return string(b[1:]), i
+	// return string(b[1:]), i
+	return string(b), i
 }
 
 func (r *RGA) GetString() string {
@@ -172,10 +173,6 @@ func NewRGA(peer int, numPeers int) *RGA {
 	return &r
 }
 
-func (r *RGA) B() {
-	log.Printf("Broadcast in RGA is %v, %v", r, r.broadcast)
-}
-
 func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- Elem) *RGA {
 	r := NewRGA(peer, numPeers)
 	r.broadcast = broadcast
@@ -210,13 +207,16 @@ func (r *RGA) Remove(id Id) (Elem, error) {
 		return Elem{}, errors.New("r.head are not removable")
 	}
 	if n, ok := r.m[id]; ok {
-		n.Elem.Rem = r.getNewChange()
+		e := Elem{}
+		e.Rem = r.getNewChange()
+		e.ID = n.Elem.ID
+		e.After = n.Elem.After
 
 		// broadcast local change
 		if r.broadcast != nil {
-			r.broadcast <- n.Elem
+			r.broadcast <- e
 		}
-		return n.Elem, nil
+		return e, r.Update(e)
 	} else {
 		return Elem{}, errors.New("cannot remove non-existent node. check local call to remove")
 	}
@@ -239,9 +239,15 @@ func (r *RGA) cleanup(min []uint64) {
 	for i, m := range min {
 		for j, n := range r.remQ[i] {
 			if m >= n.Elem.Rem.Seq {
-				n.next.prev = n.prev
-				n.prev.next = n.next
+				if n.next != nil {
+					n.next.prev = n.prev
+					n.prev.next = n.next
+				} else {
+					n.prev.next = nil
+				}
+				r.mut.Lock()
 				delete(r.m, n.Elem.ID)
+				r.mut.Lock()
 			} else {
 				r.remQ[i] = r.remQ[i][j:]
 				break
@@ -358,10 +364,10 @@ func (r *RGA) Update(e Elem) error {
 	r.mut.Unlock()
 
 	log.Println("Update insert finished")
-	if e.ID.Peer_ != r.Peer {
-		r.Doc.UpdateView()
-	}
+	r.Doc.UpdateView()
+	// if e.ID.Peer_ != r.Peer {
+	// 	r.Doc.UpdateView()
+	// }
 	log.Println("Update finished")
-	r.B()
 	return nil
 }
