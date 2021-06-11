@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"proj/crdt"
@@ -44,6 +45,7 @@ type Peer struct {
 	connect   chan websocket.Conn
 	Lat       chan<- float64
 	S         *http.Server
+	mut       sync.RWMutex
 }
 
 func MakePeer(c Config) *Peer {
@@ -131,19 +133,20 @@ func (peer *Peer) connectToPeers() {
 		log.Printf("connection on join to peer %d succeeded!", i)
 
 		// create connection and goroutine for reading from it
-		if peer.conns[i] == nil {
-			err = peer.initializeFromPeer(c)
-			if err != nil {
-				log.Printf("initializeFromPeer failed")
-				continue
-			}
-			log.Printf("Conn set for Old Peer %d on Peer %d", i, peer.peer)
-			peer.dc = false
-			peer.conns[i] = c
-			go peer.readPeer(c, i)
-		} else {
-			c.Close()
+		peer.mut.Lock()
+		// if peer.conns[i] != nil {
+		// 	peer.conns[i].Close()
+		// }
+		peer.conns[i] = c
+		peer.mut.Unlock()
+
+		err = peer.initializeFromPeer(c)
+		if err != nil {
+			log.Printf("initializeFromPeer failed")
+			continue
 		}
+		peer.dc = false
+		go peer.readPeer(c, i)
 	}
 
 	peer.dc = false
@@ -181,13 +184,20 @@ func (p *Peer) makePeerHandler() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
-		if p.conns[i] == nil {
-			p.conns[i] = c
-			log.Printf("Conn set for New Peer %d on Peer %d", i, p.peer)
-			go p.readPeer(c, i)
-		} else {
-			c.Close()
-		}
+		p.mut.Lock()
+		// if p.conns[i] != nil {
+		// 	p.conns[i].Close()
+		// }
+		p.conns[i] = c
+		p.mut.Unlock()
+		go p.readPeer(c, i)
+		// if p.conns[i] == nil {
+		// 	p.conns[i] = c
+		// 	log.Printf("Conn set for New Peer %d on Peer %d", i, p.peer)
+		// 	go p.readPeer(c, i)
+		// } else {
+		// 	c.Close()
+		// }
 	}
 }
 
@@ -202,7 +212,9 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 
 		// TODO: make sure error means disconnection
 		if err != nil {
+			p.mut.Lock()
 			delete(p.conns, ind)
+			p.mut.Unlock()
 			return errors.New("connection is down")
 		}
 
@@ -237,6 +249,8 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 }
 
 func (p *Peer) Size() int {
+	p.mut.RLock()
+	defer p.mut.RUnlock()
 	return len(p.conns)
 }
 
@@ -254,10 +268,12 @@ func (p *Peer) serve(handler func(w http.ResponseWriter, r *http.Request)) *http
 }
 
 func (p *Peer) Disconnect() {
+	p.mut.Lock()
 	for c := range p.conns {
 		p.conns[c].Close()
 	}
 	p.conns = make(map[int]*websocket.Conn)
+	p.mut.Unlock()
 	p.dc = true
 }
 
@@ -315,6 +331,8 @@ func (p *Peer) Broadcast(e crdt.Elem) {
 	// for k := range p.copyingTo {
 	// 	p.holding[k] <- by
 	// }
+	p.mut.Lock()
+	defer p.mut.Unlock()
 	for k := range p.conns {
 		// // p.conns[i] has been set
 		// if p.copyingTo[k] {
