@@ -184,14 +184,14 @@ func typeThis(doc *RgaDoc, cursor int, text string) {
 // 	as(doc[1].View() == "After_disconnect_Before_disconnect_base")
 // }
 
-func AllDocUpdateView(docList []*RgaDoc, wait bool) {
-	if wait {
-		time.Sleep(ViewProTime)
-	}
-	for _, doc := range docList {
-		doc.UpdateView()
-	}
-}
+// func AllDocUpdateView(docList []*RgaDoc, wait bool) {
+// 	if wait {
+// 		time.Sleep(ViewProTime)
+// 	}
+// 	for _, doc := range docList {
+// 		doc.UpdateView()
+// 	}
+// }
 
 func TestDocLimit(t *testing.T) {
 

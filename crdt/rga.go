@@ -38,7 +38,8 @@ type RGA struct {
 	numPeers int
 	time     uint64
 	seq      uint64
-	mut      sync.Mutex
+	cMut     sync.Mutex
+	mut      sync.RWMutex
 	Head     Node
 	m        map[Id]*Node
 	remQ     [][]*Node
@@ -52,14 +53,13 @@ func (r *RGA) GetEncoding() []byte {
 		List: make([]Elem, 0),
 	}
 
+	r.mut.RLock()
 	curr := &r.Head
 	for curr != nil {
 		enc.List = append(enc.List, curr.Elem)
 		curr = curr.next
 	}
-
-	// log.Printf("Peer %d Encoding Has: %v", r.Peer, enc.List)
-	// log.Print ln(r.GetView())
+	r.mut.RUnlock()
 
 	buf := bytes.NewBuffer([]byte{})
 	err := gob.NewEncoder(buf).Encode(enc)
@@ -77,27 +77,29 @@ func (r *RGA) MergeFromEncoding(encBytes []byte) error {
 	}
 
 	log.Printf("Decoding Has: %v", enc.List)
-	log.Printf("Peer %d Already Has: |%v|", r.Peer, r.GetString())
+	// log.Printf("Peer %d Already Has: |%v|", r.Peer, r.PrintString())
 
 	for _, enc := range enc.List {
-		err = r.Update(enc)
+		log.Printf("Update with: %v", enc)
+		_, err = r.Update(enc)
 		if err != nil {
 			return err
 		}
+		log.Printf("End Update with: %v", enc)
 	}
 
-	log.Printf("Peer %d NOW Has: |%v|", r.Peer, r.GetString())
-	r.Doc.UpdateView()
+	// log.Printf("Peer %d NOW Has: |%v|", r.Peer, r.PrintString())
+	// r.Doc.UpdateView()
 	return nil
 }
 
 func (r *RGA) clock(atLeast uint64) {
-	r.mut.Lock()
+	r.cMut.Lock()
+	defer r.cMut.Unlock()
 	if atLeast > r.time {
 		r.time = atLeast
 	}
 	r.time = r.time + 1
-	r.mut.Unlock()
 }
 
 // makes every local operation on the rga unique by incrementing the clock
@@ -108,6 +110,9 @@ func (r *RGA) getNewChange() Id {
 }
 
 func (r *RGA) GetView() (string, []Id) {
+	r.mut.RLock()
+	defer r.mut.RUnlock()
+
 	var b []byte
 	var i []Id
 	curr := &r.Head
@@ -123,7 +128,9 @@ func (r *RGA) GetView() (string, []Id) {
 	return string(b), i
 }
 
-func (r *RGA) GetString() string {
+func (r *RGA) PrintString() string {
+	r.mut.RLock()
+	defer r.mut.RUnlock()
 	var b []byte
 	curr := &r.Head
 	for curr != nil {
@@ -133,6 +140,8 @@ func (r *RGA) GetString() string {
 		}
 		curr = curr.next
 	}
+
+	log.Printf("RGA STRING IS : ||||||||||\n%s\n||||||||||", string(b[1:]))
 	return string(b[1:])
 }
 
@@ -146,9 +155,7 @@ func newRGAList(numPeers int) []*RGA {
 }
 
 func (r *RGA) Contains(e Elem) bool {
-	r.mut.Lock()
 	n, ok := r.m[e.ID]
-	r.mut.Unlock()
 	if ok && n.Elem.Rem == e.Rem {
 		return true
 	}
@@ -193,12 +200,15 @@ func (r *RGA) Append(val byte, after Id) (Elem, error) {
 	e := Elem{ID: r.getNewChange(), After: after, Rem: Id{}, Val: val}
 
 	log.Printf("Appending to rga with broadcast %v, %v", r, r.broadcast)
-	// broadcast local change
-	if r.broadcast != nil {
-		log.Printf("Writing to broadcast at address %p", r.broadcast)
-		r.broadcast <- e
-	}
-	return e, r.Update(e)
+
+	// // broadcast local change
+	// if r.broadcast != nil {
+	// 	log.Printf("Writing to broadcast at address %p", r.broadcast)
+	// 	r.broadcast <- e
+	// }
+
+	_, err := r.Update(e)
+	return e, err
 }
 
 // "removes" an elem by setting its rem field to describe the new operation
@@ -206,17 +216,15 @@ func (r *RGA) Remove(id Id) (Elem, error) {
 	if id == r.Head.Elem.ID {
 		return Elem{}, errors.New("r.head are not removable")
 	}
+	log.Printf("Removing value with id |%d| at peer |%d|", id.Time, id.Peer_)
 	if n, ok := r.m[id]; ok {
 		e := Elem{}
 		e.Rem = r.getNewChange()
 		e.ID = n.Elem.ID
 		e.After = n.Elem.After
 
-		// broadcast local change
-		if r.broadcast != nil {
-			r.broadcast <- e
-		}
-		return e, r.Update(e)
+		_, err := r.Update(e)
+		return e, err
 	} else {
 		return Elem{}, errors.New("cannot remove non-existent node. check local call to remove")
 	}
@@ -239,15 +247,15 @@ func (r *RGA) cleanup(min []uint64) {
 	for i, m := range min {
 		for j, n := range r.remQ[i] {
 			if m >= n.Elem.Rem.Seq {
+				r.mut.Lock()
 				if n.next != nil {
 					n.next.prev = n.prev
 					n.prev.next = n.next
 				} else {
 					n.prev.next = nil
 				}
-				r.mut.Lock()
 				delete(r.m, n.Elem.ID)
-				r.mut.Lock()
+				r.mut.Unlock()
 			} else {
 				r.remQ[i] = r.remQ[i][j:]
 				break
@@ -297,38 +305,49 @@ func sortedInsert(list []*Node, node *Node) []*Node {
 }
 
 // merge in any elem into RGA (used by local append and any downstream ops)
-func (r *RGA) Update(e Elem) error {
+func (r *RGA) Update(e Elem) (bool, error) {
 	// log.Printf("Update on peer %d with elem num %d from peer %d with byte %v", r.Peer, e.ID.Time, e.ID.Peer_, e.Val)
-	log.Println("Update beginning with %s with current view '%s'", e.Val, r.Doc.View())
+	// log.Println("Update beginning with %s with current view '%s'", e.Val, r.Doc.View())
+	log.Println("Waiting on Update mut")
+	r.mut.Lock()
+	log.Println("Acquired on Update mut")
+	defer r.mut.Unlock()
+
+	if r.Contains(e) {
+		return false, nil
+	}
+
+	// new element so broadcast
+	r.broadcast <- e
 
 	// node already exists and its being removed (modify node ala tombstone)
-	r.mut.Lock()
 	n, ok := r.m[e.ID]
-	r.mut.Unlock()
 	log.Println("Update checked if node exists in map")
 	if ok {
 		// redundant operation
 		if e.Rem.Time == 0 {
-			return nil
+			panic("SHOULDNT HAPPEN")
 		}
 
 		n.Elem = e
 		// r.remQ = append(r.remQ, n)
 		r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
+		log.Println("check 1")
 		// update clock/vc for new remove
 		r.clock(e.Rem.Time)
+		log.Println("check 2")
 		r.vecC.incrementTo(e.Rem.Peer_, e.Rem.Seq)
 
-		if e.Rem.Peer_ != r.Peer {
-			r.Doc.UpdateView()
-		}
-		return nil
+		log.Println("check 3")
+		r.Doc.RemoveFromView(e)
+		log.Println("check 4")
+		return true, nil
 	}
 
 	// if parent does not exist, return error (maintains causal order)
 	after, ok := r.m[e.After]
 	if !ok {
-		return errors.New("cannot find parent elem")
+		return false, errors.New("cannot find parent elem")
 	}
 
 	// update clock/vc for new append
@@ -339,18 +358,11 @@ func (r *RGA) Update(e Elem) error {
 	log.Println("Update ready to insert")
 
 	// find insert location
-	// DO atomically to avoid data races
-	r.mut.Lock()
-	// ignore existing node to avoid inconsistency on redundent operations
-	_, ok = r.m[e.ID]
-	if ok {
-		r.mut.Unlock()
-		return nil
-	}
-
 	prev := after
 	next := prev.next
-	for next != nil && next.Elem.After == next.prev.Elem.ID && next.Elem.isNewerThan(e) {
+	// for next != nil && next.Elem.After == next.prev.Elem.ID && next.Elem.isNewerThan(e) {
+	// keep going until next element is after another element or older
+	for next != nil && next.Elem.After == e.After && next.Elem.isNewerThan(e) {
 		prev = next
 		next = next.next
 	}
@@ -361,13 +373,10 @@ func (r *RGA) Update(e Elem) error {
 	}
 	prev.next = node
 	r.m[e.ID] = node
-	r.mut.Unlock()
+
+	r.Doc.AddToView(e, prev.Elem.ID)
 
 	log.Println("Update insert finished")
-	r.Doc.UpdateView()
-	// if e.ID.Peer_ != r.Peer {
-	// 	r.Doc.UpdateView()
-	// }
 	log.Println("Update finished")
-	return nil
+	return true, nil
 }

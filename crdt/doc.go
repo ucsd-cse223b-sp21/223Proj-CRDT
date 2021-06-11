@@ -16,7 +16,9 @@ type Document interface {
 
 	Remove(at int) error
 
-	UpdateView()
+	ComputeView()
+	RemoveFromView(e Elem)
+	AddToView(e Elem, hint Id)
 
 	AddFront(*websocket.Conn) // maps are pointer types
 }
@@ -25,7 +27,7 @@ var _ Document = new(RgaDoc)
 
 func NewRgaDoc(r *RGA) Document {
 	doc := RgaDoc{r: r}
-	doc.UpdateView()
+	doc.ComputeView()
 	return &doc
 }
 
@@ -61,21 +63,7 @@ func (d *RgaDoc) Append(after int, val byte) error {
 
 	// elem, err := d.r.Append(val, afterId)
 	_, err := d.r.Append(val, afterId)
-	if err != nil {
-		return err
-	}
-
-	// log.Println("after rga append call")
-
-	// if after == len(d.content)-1 {
-	// 	d.content = d.content + string(val)
-	// 	d.idList = append(d.idList, elem.ID)
-	// } else {
-	// 	d.content = d.content[:after+1] + string(val) + d.content[after+1:]
-	// 	d.idList = append(append(d.idList[:after+1], elem.ID), d.idList[after+1:]...)
-	// }
-
-	return nil
+	return err
 }
 
 // remove at should be in range (0,length] (exclusive to 0 / head)
@@ -84,27 +72,53 @@ func (d *RgaDoc) Remove(at int) error {
 		return errors.New("after out of range")
 	}
 
+	log.Println("BEFORE idlist length ", len(d.idList))
+	log.Println("idlist :", d.idList)
 	id := d.idList[at]
-
 	_, err := d.r.Remove(id)
-	if err != nil {
-		return err
-	}
+	log.Println("AFTER idlist length ", len(d.idList))
+	log.Println("idlist :", d.idList)
 
-	// if at == len(d.content)-1 {
-	// 	d.content = d.content[:at]
-	// 	d.idList = d.idList[:at]
-	// } else {
-	// 	d.content = d.content[:at] + d.content[at+1:]
-	// 	d.idList = append(d.idList[:at], d.idList[at+1:]...)
-	// }
-
-	return nil
+	return err
 }
 
-func (d *RgaDoc) UpdateView() {
+func (d *RgaDoc) ComputeView() {
 	d.content, d.idList = d.r.GetView()
 	if d.front != nil && d.front.WriteMessage(websocket.TextMessage, []byte(d.content)) != nil {
 		d.front = nil
 	}
+}
+
+func (d *RgaDoc) RemoveFromView(e Elem) {
+	for at, id := range d.idList {
+		if id == e.ID {
+			if at == len(d.content)-1 {
+				d.content = d.content[:at]
+				d.idList = d.idList[:at]
+			} else {
+				d.content = d.content[:at] + d.content[at+1:]
+				d.idList = append(d.idList[:at], d.idList[at+1:]...)
+			}
+			break
+		}
+	}
+}
+func (d *RgaDoc) AddToView(e Elem, hint Id) {
+	log.Println("new id is ", e.ID, " for value ", e.Val)
+	log.Println("previous idlist is ", d.idList)
+	for after, id := range d.idList {
+		if id == hint {
+			if after == len(d.content)-1 {
+				d.content = d.content + string(e.Val)
+				d.idList = append(d.idList, e.ID)
+			} else {
+				d.content = d.content[:after+1] + string(e.Val) + d.content[after+1:]
+				d.idList = append(d.idList[:after+2], d.idList[after+1:]...)
+				d.idList[after+1] = e.ID
+			}
+			break
+		}
+	}
+
+	log.Println("new idlist is ", d.idList)
 }

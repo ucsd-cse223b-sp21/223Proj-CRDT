@@ -102,7 +102,7 @@ func TestFaultTolerance1(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	for i := 1; i < len(addrs); i++ {
-		log.Println(peer_list[i].Rga.GetView())
+		// log.Println(peer_list[i].Rga.GetView())
 		as(peer_list[i].Rga.Contains(elem))
 	}
 }
@@ -142,9 +142,9 @@ func TestFaultTolerance2(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	s, l := peer_list[0].Rga.GetView()
-	log.Println(s, l)
-	log.Printf("Length is %d but addrs is %d", len(l), len(addrs))
+	// s, l := peer_list[0].Rga.GetView()
+	// log.Println(s, l)
+	// log.Printf("Length is %d but addrs is %d", len(l), len(addrs))
 
 	for i := 1; i < len(addrs); i++ {
 		as(peer_list[0].Rga.Contains(es[i]))

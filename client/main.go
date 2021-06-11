@@ -128,7 +128,7 @@ func runCmd(p *network.Peer, args []string) bool {
 		fmt.Println(p.Rga.Doc.View())
 		fmt.Println("=== | END  | ===")
 	case "update":
-		p.Rga.Doc.UpdateView()
+		p.Rga.Doc.ComputeView()
 	case "connect":
 		p.Connect()
 	case "disconnect":

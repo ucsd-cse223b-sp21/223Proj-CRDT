@@ -228,16 +228,11 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 		duration := time.Since(start).Seconds()
 		log.Printf("Finished read with time: %f and lat is %v", duration, p.Lat)
 
-		// ignores message if it has already been received
-		if !p.Rga.Contains(elem) {
-			p.broadcast <- elem
-			p.Rga.Update(elem)
-
-			// time latency to complete update
-			if p.Lat != nil {
-				log.Printf("Sending time: %f", duration)
-				p.Lat <- duration
-			}
+		// update and write latency if new
+		new, err := p.Rga.Update(elem)
+		if new && err == nil && p.Lat != nil {
+			log.Printf("Sending time: %f", duration)
+			p.Lat <- duration
 		}
 	}
 }
@@ -298,7 +293,7 @@ func (p *Peer) writeProc() {
 		} else if len(p.backup) > 0 {
 			for len(p.backup) > 0 {
 				b := <-p.backup
-				p.Rga.Update(b)
+				// p.Rga.Update(b)
 				p.Broadcast(b)
 			}
 		}
