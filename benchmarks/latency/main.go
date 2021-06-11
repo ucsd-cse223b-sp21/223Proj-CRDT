@@ -52,7 +52,7 @@ func main() {
 
 	// vary proportion of appends to removes to get performance data
 	var p float64
-	for p = 0.9; p > 0.8; p -= 0.1 {
+	for p = 0.8; p > 0.5; p -= 0.00001 {
 		Lat := make(chan float64, 100)
 		setupPeers(*numPeers, Lat)
 		log.Printf("peer 1 is at address %p and peer 2 at address %p", peers[0], peers[1])

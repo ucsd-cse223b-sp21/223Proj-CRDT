@@ -46,5 +46,21 @@ function f9() {
 	document.getElementById("textarea1").style.fontStyle = "normal";
 	document.getElementById("textarea1").style.textTransform = "capitalize";
 	document.getElementById("textarea1").value = " ";
+	console.clear();
+	str = "";
 }
- 
+const log = document.getElementById('textarea1');
+var str = "";
+document.addEventListener('keypress', function(e){
+	str+=e.key;
+	console.log(str)
+
+});
+document.addEventListener('keydown', function(e){
+	var key = e.key;
+	if (key === "Backspace" || key === "Delete"){
+		str = str.slice(0,-1);
+		console.log(str);
+	}
+});
+

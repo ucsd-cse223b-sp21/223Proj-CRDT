@@ -29,7 +29,7 @@
 </head>
 <!--Body start-->
 <link rel="stylesheet" href="main.css">
-
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular.min.js"></script>
 <body>
 	<section class="">
 		<h1 class="shadow-sm">TEXT EDITOR</h1>
@@ -112,13 +112,18 @@
 			</div>
 			<div class="col-md-6 col-sm-9">
 				<div class="flex-box">
+					<div ng-app="">
 					<textarea id="textarea1"
+							input type="text"
 							class="input shadow"
 							name="name"
 							rows="15"
 							cols="100"
-							placeholder="Your text here ">
+							placeholder="Your text here " ng-model="name">
+							
 					</textarea>
+						<p ng-bind="name"></p>
+					  </div>
 				</div>
 			</div>
 			<div class="col-md-3">
@@ -127,7 +132,7 @@
 	</section>
 	<br>
 	<br>
-	<h6 style="text-align:center;">Priyansh Jha 2021.</h6>
+	
 
 	<!--External JavaScript file-->
 	<script src="home.js"></script>
