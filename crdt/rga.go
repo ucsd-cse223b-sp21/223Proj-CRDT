@@ -201,8 +201,7 @@ func (r *RGA) Length() int {
 func (r *RGA) Append(val byte, after Id) (Elem, error) {
 	e := Elem{ID: r.getNewChange(), After: after, Rem: Id{}, Val: val}
 
-	log.Printf("Appending to rga with broadcast %v, %v", r, r.broadcast)
-
+	// log.Printf("Appending to rga with broadcast %v, %v", r, r.broadcast)
 	// // broadcast local change
 	// if r.broadcast != nil {
 	// 	log.Printf("Writing to broadcast at address %p", r.broadcast)
@@ -218,7 +217,7 @@ func (r *RGA) Remove(id Id) (Elem, error) {
 	if id == r.Head.Elem.ID {
 		return Elem{}, errors.New("r.head are not removable")
 	}
-	log.Printf("Removing value with id |%d| at peer |%d|", id.Time, id.Peer_)
+	// log.Printf("Removing value with id |%d| at peer |%d|", id.Time, id.Peer_)
 	e := Elem{}
 	e.Rem = r.getNewChange()
 	e.ID = id
@@ -293,21 +292,19 @@ func (r *RGA) VectorClock() VecClock {
 func (r *RGA) Update(e Elem) (bool, error) {
 	// log.Printf("Update on peer %d with elem num %d from peer %d with byte %v", r.Peer, e.ID.Time, e.ID.Peer_, e.Val)
 	// log.Println("Update beginning with %s with current view '%s'", e.Val, r.Doc.View())
-	log.Println("Waiting on Update mut")
 	r.mut.Lock()
 	defer r.mut.Unlock()
-	log.Println("Acquired on Update mut")
 
 	if r.Contains(e) {
 		return false, nil
 	}
 
 	// new element so broadcast
+	log.Printf("Elem %v is being broadcast by Update", e)
 	r.broadcast <- e
 
 	// node already exists and its being removed (modify node ala tombstone)
 	n, ok := r.m[e.ID]
-	log.Println("Update checked if node exists in map")
 	if ok {
 		// redundant operation
 		if e.Rem.Time == 0 {

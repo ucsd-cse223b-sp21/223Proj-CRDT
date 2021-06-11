@@ -295,7 +295,8 @@ func (p *Peer) Connect() {
 // potentially consider parallelizing the writes to different peers?
 func (p *Peer) writeProc() {
 	for {
-		log.Printf("WriteProc running with broadcast at address %p", p.broadcast)
+		log.Printf("WriteProc running with broadcast at address %p on Peer %d", p.broadcast, p.peer)
+		log.Printf("State of rga is |%s|", p.Rga.Doc.View())
 		e := <-p.broadcast
 		log.Printf("Broadcasting elem %v", e)
 		// log.Printf("Writing element from Peer %d", p.peer)
