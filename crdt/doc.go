@@ -2,7 +2,6 @@ package crdt
 
 import (
 	"errors"
-	"log"
 
 	"github.com/gorilla/websocket"
 )
@@ -56,10 +55,10 @@ func (d *RgaDoc) Append(after int, val byte) error {
 		return errors.New("after out of range")
 	}
 
-	log.Printf("length of content is %d, length of idList is %d", len(d.content), len(d.idList))
+	// log.Printf("length of content is %d, length of idList is %d", len(d.content), len(d.idList))
 	afterId := d.idList[after]
 
-	log.Println("before rga append call")
+	// log.Println("before rga append call")
 
 	// elem, err := d.r.Append(val, afterId)
 	_, err := d.r.Append(val, afterId)
@@ -72,12 +71,12 @@ func (d *RgaDoc) Remove(at int) error {
 		return errors.New("after out of range")
 	}
 
-	log.Println("BEFORE idlist length ", len(d.idList))
-	log.Println("idlist :", d.idList)
+	// log.Println("BEFORE idlist length ", len(d.idList))
+	// log.Println("idlist :", d.idList)
 	id := d.idList[at]
 	_, err := d.r.Remove(id)
-	log.Println("AFTER idlist length ", len(d.idList))
-	log.Println("idlist :", d.idList)
+	// log.Println("AFTER idlist length ", len(d.idList))
+	// log.Println("idlist :", d.idList)
 
 	return err
 }
@@ -104,8 +103,6 @@ func (d *RgaDoc) RemoveFromView(e Elem) {
 	}
 }
 func (d *RgaDoc) AddToView(e Elem, hint Id) {
-	log.Println("new id is ", e.ID, " for value ", e.Val)
-	log.Println("previous idlist is ", d.idList)
 	for after, id := range d.idList {
 		if id == hint {
 			if after == len(d.content)-1 {
@@ -119,6 +116,4 @@ func (d *RgaDoc) AddToView(e Elem, hint Id) {
 			break
 		}
 	}
-
-	log.Println("new idlist is ", d.idList)
 }

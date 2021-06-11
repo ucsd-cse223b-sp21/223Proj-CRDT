@@ -297,9 +297,10 @@ func (p *Peer) writeProc() {
 	for {
 		log.Printf("WriteProc running with broadcast at address %p", p.broadcast)
 		e := <-p.broadcast
-		log.Printf("Writing element from Peer %d", p.peer)
-		log.Printf("p.dc: %t", p.dc)
-		log.Printf("len(p.backup): %d", len(p.backup))
+		log.Printf("Broadcasting elem %v", e)
+		// log.Printf("Writing element from Peer %d", p.peer)
+		// log.Printf("p.dc: %t", p.dc)
+		// log.Printf("len(p.backup): %d", len(p.backup))
 		// if p.dc || len(p.conns) == 0 {
 		// p.dc = true
 		if p.dc {

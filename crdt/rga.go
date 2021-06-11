@@ -156,7 +156,7 @@ func newRGAList(numPeers int) []*RGA {
 
 func (r *RGA) Contains(e Elem) bool {
 	n, ok := r.m[e.ID]
-	if ok && n.Elem.Rem == e.Rem {
+	if ok && (n.Elem.Rem == e.Rem || e.Rem == Id{}) {
 		return true
 	}
 	return false
@@ -361,7 +361,7 @@ func (r *RGA) Update(e Elem) (bool, error) {
 
 	r.Doc.AddToView(e, prev.Elem.ID)
 
-	// log.Println("Update insert finished")
+	log.Printf("Update on Peer #%d with string |%s|", r.Peer, r.Doc.View())
 	// log.Println("Update finished")
 	return true, nil
 }
