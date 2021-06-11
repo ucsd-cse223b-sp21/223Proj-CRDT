@@ -225,11 +225,10 @@ func (p *Peer) readPeer(c *websocket.Conn, ind int) error {
 			p.gc <- vc
 		}
 
-		duration := time.Since(start).Seconds()
-		log.Printf("Finished read with time: %f and lat is %v", duration, p.Lat)
-
 		// update and write latency if new
 		new, err := p.Rga.Update(elem)
+		duration := time.Since(start).Seconds()
+		log.Printf("Finished read with time: %f and lat is %v", duration, p.Lat)
 		if new && err == nil && p.Lat != nil {
 			log.Printf("Sending time: %f", duration)
 			p.Lat <- duration
