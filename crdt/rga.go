@@ -76,16 +76,16 @@ func (r *RGA) MergeFromEncoding(encBytes []byte) error {
 		return err
 	}
 
-	log.Printf("Decoding Has: %v", enc.List)
+	// log.Printf("Decoding Has: %v", enc.List)
 	// log.Printf("Peer %d Already Has: |%v|", r.Peer, r.PrintString())
 
 	for _, enc := range enc.List {
-		log.Printf("Update with: %v", enc)
+		// log.Printf("Update with: %v", enc)
 		_, err = r.Update(enc)
 		if err != nil {
 			return err
 		}
-		log.Printf("End Update with: %v", enc)
+		// log.Printf("End Update with: %v", enc)
 	}
 
 	// log.Printf("Peer %d NOW Has: |%v|", r.Peer, r.PrintString())
@@ -156,7 +156,7 @@ func newRGAList(numPeers int) []*RGA {
 
 func (r *RGA) Contains(e Elem) bool {
 	n, ok := r.m[e.ID]
-	if ok && n.Elem.Rem == e.Rem {
+	if ok && (n.Elem.Rem == e.Rem || e.Rem == Id{}) {
 		return true
 	}
 	return false
@@ -172,10 +172,10 @@ func NewRGA(peer int, numPeers int) *RGA {
 		remQ: make([][]*Node, numPeers),
 		vecC: NewVecClock(peer, numPeers),
 	}
-	r.Doc = NewRgaDoc(&r)
 
 	r.Head.Elem = Elem{ID: Id{0, 0, 0}, After: Id{}, Rem: Id{}, Val: 0}
 	r.m[r.Head.Elem.ID] = &r.Head
+	r.Doc = NewRgaDoc(&r)
 
 	return &r
 }
@@ -189,7 +189,9 @@ func NewRGAOverNetwork(peer int, numPeers int, broadcast chan<- Elem) *RGA {
 }
 
 func (r *RGA) Length() int {
+	r.mut.RLock()
 	L := len(r.m)
+	r.mut.RUnlock()
 	return L
 }
 
@@ -217,17 +219,23 @@ func (r *RGA) Remove(id Id) (Elem, error) {
 		return Elem{}, errors.New("r.head are not removable")
 	}
 	log.Printf("Removing value with id |%d| at peer |%d|", id.Time, id.Peer_)
-	if n, ok := r.m[id]; ok {
-		e := Elem{}
-		e.Rem = r.getNewChange()
-		e.ID = n.Elem.ID
-		e.After = n.Elem.After
+	e := Elem{}
+	e.Rem = r.getNewChange()
+	e.ID = id
+	_, err := r.Update(e)
+	return e, err
 
-		_, err := r.Update(e)
-		return e, err
-	} else {
-		return Elem{}, errors.New("cannot remove non-existent node. check local call to remove")
-	}
+	// if n, ok := r.m[id]; ok {
+	// 	e := Elem{}
+	// 	e.Rem = r.getNewChange()
+	// 	e.ID = n.Elem.ID
+	// 	e.After = n.Elem.After
+
+	// 	_, err := r.Update(e)
+	// 	return e, err
+	// } else {
+	// 	return Elem{}, errors.New("cannot remove non-existent node. check local call to remove")
+	// }
 }
 
 // actually deletes "removed" nodes up to id.seq on id.peer (should only be called when all peers are known to have seen it)
@@ -287,8 +295,8 @@ func (r *RGA) Update(e Elem) (bool, error) {
 	// log.Println("Update beginning with %s with current view '%s'", e.Val, r.Doc.View())
 	log.Println("Waiting on Update mut")
 	r.mut.Lock()
-	log.Println("Acquired on Update mut")
 	defer r.mut.Unlock()
+	log.Println("Acquired on Update mut")
 
 	if r.Contains(e) {
 		return false, nil
@@ -313,15 +321,11 @@ func (r *RGA) Update(e Elem) (bool, error) {
 		// r.remQ[e.Rem.Peer_] = sortedInsert(r.remQ[e.Rem.Peer_], n)
 		r.remQ[e.Rem.Peer_] = append(r.remQ[e.Rem.Peer_], n)
 
-		log.Println("check 1")
 		// update clock/vc for new remove
 		r.clock(e.Rem.Time)
-		log.Println("check 2")
 		r.vecC.incrementTo(e.Rem.Peer_, e.Rem.Seq)
 
-		log.Println("check 3")
 		r.Doc.RemoveFromView(e)
-		log.Println("check 4")
 		return true, nil
 	}
 
@@ -333,10 +337,10 @@ func (r *RGA) Update(e Elem) (bool, error) {
 
 	// update clock/vc for new append
 	r.clock(e.ID.Time)
-	log.Println("e.ID.Peer_", e.ID.Peer_)
+	// log.Println("e.ID.Peer_", e.ID.Peer_)
 	r.vecC.incrementTo(e.ID.Peer_, e.ID.Seq)
 
-	log.Println("Update ready to insert")
+	// log.Println("Update ready to insert")
 
 	// find insert location
 	prev := after
@@ -357,7 +361,7 @@ func (r *RGA) Update(e Elem) (bool, error) {
 
 	r.Doc.AddToView(e, prev.Elem.ID)
 
-	log.Println("Update insert finished")
-	log.Println("Update finished")
+	log.Printf("Update on Peer #%d with string |%s|", r.Peer, r.Doc.View())
+	// log.Println("Update finished")
 	return true, nil
 }

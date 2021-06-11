@@ -59,7 +59,7 @@ func main() {
 
 		//var nLat float64
 		var lLat float64
-		for t := 0; t < 100; t++ {
+		for t := 0; t < 1000; t++ {
 			log.Println("T is :", t)
 
 			// seed with varying number
@@ -132,6 +132,7 @@ func main() {
 			})
 
 			t = t + 1
+			time.Sleep(50 * time.Millisecond)
 		}
 
 		time.Sleep(2 * time.Second)
@@ -140,8 +141,8 @@ func main() {
 		log.Println("View 1", peers[0].Rga.Doc.View())
 		log.Println("View 2", peers[1].Rga.Doc.View())
 
-		// peers[0].Rga.Doc.UpdateView()
-		// peers[1].Rga.Doc.UpdateView()
+		// peers[0].Rga.Doc.ComputeView()
+		// peers[1].Rga.Doc.ComputeView()
 
 		// log.Println("ARE VIEWS EQUAL ? :", peers[0].Rga.Doc.View() == peers[1].Rga.Doc.View())
 		// log.Println("View 1", peers[0].Rga.Doc.View())
