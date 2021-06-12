@@ -300,7 +300,7 @@ func (r *RGA) Update(e Elem) (bool, error) {
 	}
 
 	// new element so broadcast
-	log.Printf("Elem %v is being broadcast by Update", e)
+	// log.Printf("Elem %v is being broadcast by Update", e)
 	r.broadcast <- e
 
 	// node already exists and its being removed (modify node ala tombstone)

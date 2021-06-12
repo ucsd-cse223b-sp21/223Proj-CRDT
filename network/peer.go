@@ -42,7 +42,6 @@ type Peer struct {
 	backup    chan crdt.Elem
 	gc        chan<- crdt.VecClock
 	dc        bool
-	connect   chan websocket.Conn
 	Lat       chan<- float64
 	S         *http.Server
 	mut       sync.RWMutex
@@ -63,7 +62,6 @@ func MakePeer(c Config) *Peer {
 		Rga:       rga,
 		gc:        crdt.StartGC(rga),
 		dc:        true,
-		connect:   make(chan websocket.Conn),
 	}
 
 	return &peer
@@ -322,7 +320,7 @@ func (p *Peer) writeProc() {
 }
 
 func (p *Peer) Broadcast(e crdt.Elem) {
-	log.Printf("Broadcasting element from Peer %d", p.peer)
+	// log.Printf("Broadcasting element from Peer %d", p.peer)
 	msg := Message{E: e, Vc: p.Rga.VectorClock()}
 	buf := bytes.NewBuffer([]byte{})
 	enc := gob.NewEncoder(buf)
